@@ -1,7 +1,11 @@
 const helmet = require('helmet');
 const crypto = require('crypto');
+const { generateCsrfToken } = require('./csrf');
 
 module.exports = (app) => {
+  // Add CSRF token generation
+  app.use(generateCsrfToken);
+  
   // Generate nonce for CSP
   app.use((req, res, next) => {
     res.locals.nonce = crypto.randomBytes(16).toString('base64');
