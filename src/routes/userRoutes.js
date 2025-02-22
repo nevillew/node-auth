@@ -9,7 +9,7 @@ const { csrfProtection } = require('../middleware/csrf');
 router.post('/', 
   authenticateHandler, 
   (req, res, next) => {
-    req.route = { scopes: ['write'] };
+    req.route = { scopes: ['users:write'] };
     next();
   },
   userController.create
@@ -33,7 +33,14 @@ router.put('/:id/roles', authenticateHandler, userController.assignRoles);
 router.put('/:id/permissions', authenticateHandler, userController.updatePermissions);
 
 // Activity monitoring
-router.get('/:id/activity', authenticateHandler, userController.getActivity);
+router.get('/:id/activity', 
+  authenticateHandler,
+  (req, res, next) => {
+    req.route = { scopes: ['users:activity:read'] };
+    next();
+  }, 
+  userController.getActivity
+);
 
 // Account deactivation
 router.post('/:id/deactivate', authenticateHandler, userController.deactivate);

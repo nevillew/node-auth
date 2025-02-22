@@ -68,12 +68,25 @@ const authenticateHandler = async (req, res, next) => {
     // Verify token has required scopes for the route
     const requiredScopes = req.route?.scopes || [];
     if (requiredScopes.length > 0) {
-      const hasRequiredScopes = requiredScopes.every(scope => 
-        token.scopes.includes(scope)
-      );
+      const { hasRequiredScopes } = require('../auth/scopes');
       
-      if (!hasRequiredScopes) {
-        throw new Error('Insufficient scopes');
+      if (!hasRequiredScopes(token.scopes, requiredScopes)) {
+        await SecurityAuditLog.create({
+          userId: token.user?.id,
+          event: 'INSUFFICIENT_SCOPE_ACCESS',
+          details: {
+            requiredScopes,
+            userScopes: token.scopes,
+            path: req.path,
+            method: req.method
+          },
+          severity: 'medium'
+        });
+        
+        throw new AppError('INSUFFICIENT_PERMISSIONS', 403, {
+          required: requiredScopes,
+          provided: token.scopes
+        });
       }
     }
     
