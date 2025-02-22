@@ -41,13 +41,12 @@ const oauth2Model = {
   // Required for Password Grant and Client Credentials
   saveToken: async (token, client, user) => {
     const accessToken = await OAuthToken.create({
-        accessToken: token.accessToken,
-        accessTokenExpiresAt: token.accessTokenExpiresAt,
-        refreshToken: token.refreshToken,
-        refreshTokenExpiresAt: token.refreshTokenExpiresAt,
-        clientId: client.id,
-        userId: user ? user.id : null
-      }
+      accessToken: token.accessToken,
+      accessTokenExpiresAt: token.accessTokenExpiresAt,
+      refreshToken: token.refreshToken,
+      refreshTokenExpiresAt: token.refreshTokenExpiresAt,
+      clientId: client.id,
+      userId: user ? user.id : null
     });
 
     return {
