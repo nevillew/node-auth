@@ -23,6 +23,27 @@ module.exports = async (req, res, next) => {
       return res.status(403).json({ error: 'Tenant is suspended' });
     }
 
+    // Check IP restrictions
+    if (tenant.securityPolicy?.ipRestrictions?.enabled) {
+      const clientIP = req.ip || req.connection.remoteAddress;
+      const { allowedIPs, allowedRanges, blockList } = tenant.securityPolicy.ipRestrictions;
+
+      // Check if IP is blocked
+      if (blockList.includes(clientIP)) {
+        logger.warn('Blocked IP attempt', { ip: clientIP, tenantId });
+        return res.status(403).json({ error: 'IP address is blocked' });
+      }
+
+      // Check if IP is explicitly allowed
+      const isAllowed = allowedIPs.includes(clientIP) || 
+                       allowedRanges.some(range => isIPInRange(clientIP, range));
+
+      if (!isAllowed) {
+        logger.warn('Unauthorized IP attempt', { ip: clientIP, tenantId });
+        return res.status(403).json({ error: 'IP address not allowed' });
+      }
+    }
+
     next();
   } catch (error) {
     res.status(500).json({ error: error.message });

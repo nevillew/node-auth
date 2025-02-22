@@ -1,6 +1,26 @@
 const Joi = require('joi');
 
-const createUserSchema = Joi.object({
+const getPasswordValidation = async (tenantId) => {
+  const tenant = await Tenant.findByPk(tenantId);
+  const policy = tenant?.securityPolicy?.password || {
+    minLength: 8,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumbers: true,
+    requireSpecialChars: true
+  };
+
+  let pattern = '^';
+  if (policy.requireLowercase) pattern += '(?=.*[a-z])';
+  if (policy.requireUppercase) pattern += '(?=.*[A-Z])';
+  if (policy.requireNumbers) pattern += '(?=.*\\d)';
+  if (policy.requireSpecialChars) pattern += '(?=.*[@$!%*?&])';
+  pattern += `.{${policy.minLength},}$`;
+
+  return pattern;
+};
+
+const createUserSchema = async (tenantId) => Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string()
     .min(8)

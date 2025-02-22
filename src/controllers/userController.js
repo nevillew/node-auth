@@ -9,13 +9,15 @@ const {
 } = require('../validations/userValidations');
 
 class UserController {
-  static validations = {
-    create: validate(createUserSchema),
-    update: validate(updateUserSchema),
-    changePassword: validate(changePasswordSchema),
-    search: validate(searchUserSchema),
-    bulkUpdate: validate(bulkUpdateSchema)
-  };
+  static async getValidations(tenantId) {
+    return {
+      create: validate(await createUserSchema(tenantId)),
+      update: validate(updateUserSchema),
+      changePassword: validate(await changePasswordSchema(tenantId)),
+      search: validate(searchUserSchema),
+      bulkUpdate: validate(bulkUpdateSchema)
+    };
+  }
 
   // Search users with filtering
   async search(req, res) {
