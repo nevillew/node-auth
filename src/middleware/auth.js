@@ -8,10 +8,26 @@ const authenticateHandler = async (req, res, next) => {
 
     const token = await oauth2Server.authenticate(request, response);
     
-    // Check if token is revoked
+    // Check if token is revoked and has required scopes
     const tokenRecord = await OAuthToken.findOne({
-      where: { accessToken: token.accessToken }
+      where: { accessToken: token.accessToken },
+      include: [{
+        model: Role,
+        through: { attributes: [] }
+      }]
     });
+
+    // Verify token has required scopes for the route
+    const requiredScopes = req.route?.scopes || [];
+    if (requiredScopes.length > 0) {
+      const hasRequiredScopes = requiredScopes.every(scope => 
+        token.scopes.includes(scope)
+      );
+      
+      if (!hasRequiredScopes) {
+        throw new Error('Insufficient scopes');
+      }
+    }
     
     if (tokenRecord?.revoked) {
       throw new Error('Token has been revoked');

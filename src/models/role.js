@@ -24,6 +24,18 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     description: DataTypes.TEXT,
+    scopes: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      defaultValue: [],
+      validate: {
+        isValidScopes(value) {
+          const validScopes = ['read', 'write', 'delete', 'admin'];
+          if (value.some(scope => !validScopes.includes(scope))) {
+            throw new Error('Invalid scope provided');
+          }
+        }
+      }
+    },
     tenantId: {
       type: DataTypes.UUID,
       allowNull: false,

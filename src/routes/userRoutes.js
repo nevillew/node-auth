@@ -4,7 +4,14 @@ const userController = require('../controllers/userController');
 const { authenticateHandler } = require('../middleware/auth');
 
 // User management routes
-router.post('/', authenticateHandler, userController.create);
+router.post('/', 
+  authenticateHandler, 
+  (req, res, next) => {
+    req.route = { scopes: ['write'] };
+    next();
+  },
+  userController.create
+);
 router.get('/:id', authenticateHandler, userController.get);
 router.put('/:id', authenticateHandler, userController.update);
 router.delete('/:id', authenticateHandler, userController.delete);

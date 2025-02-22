@@ -102,19 +102,27 @@ const oauth2Model = {
 
   // Required for Password Grant and Client Credentials
   saveToken: async (token, client, user) => {
+    // Get user roles and associated scopes
+    const roles = await user.getRoles();
+    const scopes = roles.reduce((acc, role) => {
+      return [...new Set([...acc, ...role.scopes])];
+    }, []);
+
     const accessToken = await OAuthToken.create({
       accessToken: token.accessToken,
       accessTokenExpiresAt: token.accessTokenExpiresAt,
       refreshToken: token.refreshToken,
       refreshTokenExpiresAt: token.refreshTokenExpiresAt,
       clientId: client.id,
-      userId: user ? user.id : null
+      userId: user ? user.id : null,
+      scopes
     });
 
     return {
       ...accessToken,
       client,
-      user
+      user,
+      scopes
     };
   },
 
