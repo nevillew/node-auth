@@ -19,14 +19,6 @@ router.delete('/:id', authenticateHandler, tenantController.delete);
 router.post('/:id/restore', authenticateHandler, tenantController.restore);
 
 // Tenant user management routes
-router.post('/:id/invite', 
-  authenticateHandler,
-  (req, res, next) => {
-    req.route = { scopes: ['admin'] };
-    next();
-  },
-  tenantController.inviteUser
-);
 
 router.post('/invitations/accept', tenantController.acceptInvitation);
 router.delete('/:id/users/:userId', authenticateHandler, tenantController.removeUser);
