@@ -47,6 +47,20 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ARRAY(DataTypes.STRING),
       defaultValue: []
     },
+    friendlyName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'Primary Authenticator',
+      validate: {
+        notEmpty: {
+          msg: 'Friendly name cannot be empty'
+        },
+        len: {
+          args: [1, 50],
+          msg: 'Friendly name must be between 1 and 50 characters'
+        }
+      }
+    },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE
   }, {
