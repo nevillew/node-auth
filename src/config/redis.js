@@ -1,8 +1,7 @@
-const { createClient } = require('redis');
+const Redis = require('ioredis');
 const { promisify } = require('util');
 const logger = require('./logger');
 const fallbackCache = require('../services/fallbackCache');
-const compression = require('compression');
 
 // Cache TTL constants
 const CACHE_TTL = {
@@ -10,6 +9,19 @@ const CACHE_TTL = {
   MEDIUM: 1800, // 30 minutes
   LONG: 3600,  // 1 hour
   VERY_LONG: 86400 // 24 hours
+};
+
+// Redis client options
+const redisOptions = {
+  host: process.env.REDIS_HOST || 'localhost',
+  port: process.env.REDIS_PORT || 6379,
+  password: process.env.REDIS_PASSWORD,
+  db: process.env.REDIS_DB || 0,
+  retryStrategy: (times) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  maxRetriesPerRequest: 3
 };
 
 // Cache prefixes
