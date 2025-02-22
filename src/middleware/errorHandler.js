@@ -22,13 +22,24 @@ const errorHandler = (err, req, res, next) => {
   const requestId = req.id || crypto.randomUUID();
 
   if (process.env.NODE_ENV === 'development') {
-    logger.error('Error 🔥', { 
+    logger.error('Request failed', { 
+      req: req,
+      error: err,
       requestId,
       errorCode: err.errorCode,
-      message: err.message,
-      stack: err.stack,
       statusCode: err.statusCode,
-      details: err.details
+      details: err.details,
+      user: req.user ? {
+        id: req.user.id,
+        email: req.user.email
+      } : null,
+      tenant: req.tenant?.id,
+      session: req.session?.id,
+      correlationId: req.headers['x-correlation-id'],
+      performanceMetrics: {
+        totalDuration: Date.now() - req.startTime,
+        memoryUsage: process.memoryUsage()
+      }
     });
     
     res.status(err.statusCode).json({
