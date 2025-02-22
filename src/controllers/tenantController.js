@@ -42,6 +42,129 @@ class TenantController {
     }
   }
 
+  // Restore tenant
+  async restore(req, res) {
+    const t = await sequelize.transaction();
+    try {
+      const tenant = await Tenant.findByPk(req.params.id, { transaction: t });
+      
+      if (!tenant) {
+        await t.rollback();
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      if (tenant.status !== 'pending_deletion') {
+        await t.rollback();
+        return res.status(400).json({ error: 'Tenant is not pending deletion' });
+      }
+
+      await tenant.update({
+        status: 'active',
+        deletionRequestedAt: null,
+        deletionScheduledAt: null
+      }, { transaction: t });
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'TENANT_RESTORED',
+        details: {
+          tenantId: tenant.id,
+          name: tenant.name,
+          restoredBy: req.user.id
+        },
+        severity: 'medium'
+      }, { transaction: t });
+
+      // Notify all tenant users
+      const tenantUsers = await TenantUser.findAll({
+        where: { tenantId: tenant.id },
+        include: [User],
+        transaction: t
+      });
+
+      await Promise.all(tenantUsers.map(user => 
+        notificationService.sendEmail({
+          to: user.email,
+          subject: `Tenant ${tenant.name} restoration`,
+          template: 'tenant-restored',
+          context: {
+            name: user.name,
+            tenantName: tenant.name,
+            restoredBy: req.user.name,
+            date: new Date().toLocaleDateString()
+          }
+        })
+      ));
+
+      await t.commit();
+      res.json({ message: 'Tenant restored successfully' });
+    } catch (error) {
+      await t.rollback();
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  // Process scheduled deletions
+  async processScheduledDeletions() {
+    const tenants = await Tenant.findAll({
+      where: {
+        status: 'pending_deletion',
+        deletionScheduledAt: {
+          [Op.lte]: new Date()
+        }
+      }
+    });
+
+    for (const tenant of tenants) {
+      const t = await sequelize.transaction();
+      try {
+        // Get all tenant users for notification
+        const tenantUsers = await TenantUser.findAll({
+          where: { tenantId: tenant.id },
+          include: [User],
+          transaction: t
+        });
+
+        // Delete tenant database
+        await manager.deleteTenantDatabase(tenant.slug);
+
+        // Delete tenant record
+        await tenant.destroy({ transaction: t });
+
+        // Create audit log
+        await SecurityAuditLog.create({
+          userId: null, // System action
+          event: 'TENANT_DELETED',
+          details: {
+            tenantId: tenant.id,
+            name: tenant.name
+          },
+          severity: 'critical'
+        }, { transaction: t });
+
+        // Notify all tenant users
+        await Promise.all(tenantUsers.map(user => 
+          notificationService.sendEmail({
+            to: user.email,
+            subject: `Tenant ${tenant.name} has been deleted`,
+            template: 'tenant-deleted',
+            context: {
+              name: user.name,
+              tenantName: tenant.name,
+              date: new Date().toLocaleDateString()
+            }
+          })
+        ));
+
+        await t.commit();
+      } catch (error) {
+        await t.rollback();
+        logger.error(`Failed to delete tenant ${tenant.id}:`, error);
+      }
+    }
+  }
+
   // Get tenant details
   async get(req, res) {
     try {
@@ -186,7 +309,7 @@ class TenantController {
     }
   }
 
-  // Delete tenant
+  // Request tenant deletion
   async delete(req, res) {
     const t = await sequelize.transaction();
     try {
@@ -211,48 +334,54 @@ class TenantController {
         });
       }
 
-      // Get all tenant users for notification
+      // Mark tenant for deletion
+      const deletionDate = new Date(Date.now() + (tenant.gracePeriodDays * 24 * 60 * 60 * 1000));
+      await tenant.update({
+        status: 'pending_deletion',
+        deletionRequestedAt: new Date(),
+        deletionScheduledAt: deletionDate
+      }, { transaction: t });
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'TENANT_DELETION_REQUESTED',
+        details: {
+          tenantId: tenant.id,
+          name: tenant.name,
+          requestedBy: req.user.id,
+          scheduledAt: deletionDate
+        },
+        severity: 'high'
+      }, { transaction: t });
+
+      // Notify all tenant users
       const tenantUsers = await TenantUser.findAll({
         where: { tenantId: tenant.id },
         include: [User],
         transaction: t
       });
 
-      // Delete tenant database
-      await manager.deleteTenantDatabase(tenant.slug);
-
-      // Delete tenant record
-      await tenant.destroy({ transaction: t });
-
-      // Create audit log
-      await SecurityAuditLog.create({
-        userId: req.user.id,
-        event: 'TENANT_DELETED',
-        details: {
-          tenantId: tenant.id,
-          name: tenant.name,
-          deletedBy: req.user.id
-        },
-        severity: 'critical'
-      }, { transaction: t });
-
-      // Notify all tenant users
       await Promise.all(tenantUsers.map(user => 
         notificationService.sendEmail({
           to: user.email,
-          subject: `Tenant ${tenant.name} has been deleted`,
-          template: 'tenant-deleted',
+          subject: `Tenant ${tenant.name} scheduled for deletion`,
+          template: 'tenant-deletion-scheduled',
           context: {
             name: user.name,
             tenantName: tenant.name,
-            deletedBy: req.user.name,
-            date: new Date().toLocaleDateString()
+            requestedBy: req.user.name,
+            deletionDate: deletionDate.toLocaleDateString(),
+            gracePeriodDays: tenant.gracePeriodDays
           }
         })
       ));
 
       await t.commit();
-      res.status(204).send();
+      res.json({
+        message: `Tenant scheduled for deletion in ${tenant.gracePeriodDays} days`,
+        deletionDate
+      });
     } catch (error) {
       await t.rollback();
       res.status(400).json({ error: error.message });

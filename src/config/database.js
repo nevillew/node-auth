@@ -104,6 +104,22 @@ class DatabaseManager {
     for (const [tenantId, connection] of this.tenantConnections) {
       await connection.close();
     }
+    
+    // Clear scheduled deletion job
+    if (this.deletionJob) {
+      clearInterval(this.deletionJob);
+    }
+  }
+
+  async startScheduledDeletionJob() {
+    // Run every hour
+    this.deletionJob = setInterval(async () => {
+      try {
+        await tenantController.processScheduledDeletions();
+      } catch (error) {
+        logger.error('Scheduled deletion job failed:', error);
+      }
+    }, 60 * 60 * 1000);
   }
 
   async getRedisClient() {

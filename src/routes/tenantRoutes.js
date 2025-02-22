@@ -16,6 +16,7 @@ router.get('/:id', authenticateHandler, tenantController.get);
 router.put('/:id', authenticateHandler, tenantController.update);
 router.post('/:id/suspend', authenticateHandler, tenantController.suspend);
 router.delete('/:id', authenticateHandler, tenantController.delete);
+router.post('/:id/restore', authenticateHandler, tenantController.restore);
 
 // Tenant user management routes
 router.post('/:id/users', authenticateHandler, tenantController.addUser);

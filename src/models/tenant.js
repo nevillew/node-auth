@@ -60,8 +60,14 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     status: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM('active', 'suspended', 'pending_deletion'),
       defaultValue: 'active'
+    },
+    deletionRequestedAt: DataTypes.DATE,
+    deletionScheduledAt: DataTypes.DATE,
+    gracePeriodDays: {
+      type: DataTypes.INTEGER,
+      defaultValue: 7
     },
     settings: {
       type: DataTypes.JSON,
