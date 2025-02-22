@@ -67,7 +67,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       unique: true
     },
-    twoFactorSecret: DataTypes.STRING,
+    twoFactorSecret: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     twoFactorEnabled: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
@@ -79,6 +82,14 @@ module.exports = (sequelize, DataTypes) => {
     twoFactorBackupCodes: {
       type: DataTypes.ARRAY(DataTypes.STRING),
       defaultValue: []
+    },
+    twoFactorSetupStartedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    twoFactorLastVerifiedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
     },
     emailVerified: {
       type: DataTypes.BOOLEAN,
