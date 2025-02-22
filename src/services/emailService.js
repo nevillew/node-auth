@@ -1,82 +1,113 @@
 const nodemailer = require('nodemailer');
 const mg = require('nodemailer-mailgun-transport');
 const logger = require('../config/logger');
-const handlebars = require('handlebars');
-const fs = require('fs');
+const Email = require('email-templates');
 const path = require('path');
+const { emailQueue, bounceQueue } = require('./emailQueueService');
 
-// Mailgun auth
+// Mailgun auth with webhooks
 const auth = {
   auth: {
     api_key: process.env.MAILGUN_API_KEY,
     domain: process.env.MAILGUN_DOMAIN
-  }
+  },
+  webhookUrl: process.env.EMAIL_WEBHOOK_URL
 };
 
 // Create transporter
 const transporter = nodemailer.createTransport(mg(auth));
 
-// Load and compile templates
-const templates = {
-  verification: loadTemplate('verification.hbs'),
-  passwordReset: loadTemplate('password-reset.hbs'),
-  welcome: loadTemplate('welcome.hbs')
-};
-
-function loadTemplate(templateName) {
-  const templatePath = path.join(__dirname, '../emails/templates', templateName);
-  const source = fs.readFileSync(templatePath, 'utf8');
-  return handlebars.compile(source);
-}
+// Configure email templates
+const email = new Email({
+  message: {
+    from: process.env.EMAIL_FROM
+  },
+  transport: transporter,
+  views: {
+    root: path.join(__dirname, '../emails/templates'),
+    options: {
+      extension: 'hbs'
+    }
+  },
+  preview: process.env.NODE_ENV !== 'production',
+  send: true
+});
 
 class EmailService {
   async sendVerificationEmail(email, name, verificationUrl) {
-    const html = templates.verification({
-      name,
-      verificationUrl,
-      supportEmail: process.env.SUPPORT_EMAIL
-    });
-
-    return this.sendEmail({
+    return emailQueue.add({
+      template: 'verification',
       to: email,
       subject: 'Verify your email address',
-      html
+      context: {
+        name,
+        verificationUrl,
+        supportEmail: process.env.SUPPORT_EMAIL
+      }
     });
   }
 
   async sendPasswordResetEmail(email, name, resetUrl) {
-    const html = templates.passwordReset({
-      name,
-      resetUrl,
-      supportEmail: process.env.SUPPORT_EMAIL
-    });
-
-    return this.sendEmail({
+    return emailQueue.add({
+      template: 'password-reset',
       to: email,
       subject: 'Password Reset Request',
-      html
+      context: {
+        name,
+        resetUrl,
+        supportEmail: process.env.SUPPORT_EMAIL
+      }
     });
   }
 
   async sendWelcomeEmail(email, name) {
-    const html = templates.welcome({
-      name,
-      supportEmail: process.env.SUPPORT_EMAIL
-    });
-
-    return this.sendEmail({
+    return emailQueue.add({
+      template: 'welcome',
       to: email,
       subject: 'Welcome to Our Platform!',
-      html
+      context: {
+        name,
+        supportEmail: process.env.SUPPORT_EMAIL
+      }
     });
   }
 
-  async sendEmail({ to, subject, html }) {
-    return transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to,
-      subject,
-      html
+  async sendEmail({ to, subject, template, context, trackingId }) {
+    // Add tracking pixel and click tracking
+    context.trackingPixel = `${process.env.API_URL}/email/track/${trackingId}/open`;
+    
+    // Wrap links with tracking
+    if (context.verificationUrl) {
+      context.verificationUrl = `${process.env.API_URL}/email/track/${trackingId}/click?url=${encodeURIComponent(context.verificationUrl)}`;
+    }
+    if (context.resetUrl) {
+      context.resetUrl = `${process.env.API_URL}/email/track/${trackingId}/click?url=${encodeURIComponent(context.resetUrl)}`;
+    }
+
+    return email.send({
+      template,
+      message: {
+        to,
+        subject,
+      },
+      locals: context
+    });
+  }
+
+  // Webhook handlers
+  async handleBounce(data) {
+    return bounceQueue.add({
+      email: data.recipient,
+      reason: data.error,
+      category: data.category
+    });
+  }
+
+  async handleDelivery(data) {
+    return emailQueue.getJob(data.trackingId).then(job => {
+      if (job) {
+        job.update({ delivered: true, deliveredAt: new Date() });
+      }
     });
   }
 }
