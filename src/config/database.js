@@ -167,8 +167,32 @@ class DatabaseManager {
   }
 
   async createTenantDatabase(tenantSlug) {
-    // Implementation for creating new tenant database
-    // This would involve creating a new database and running migrations
+    const client = new Client({
+      user: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT
+    });
+
+    try {
+      await client.connect();
+      
+      // Create database
+      await client.query(`CREATE DATABASE "${tenantSlug}"`);
+      
+      // Create schema
+      const tenantDb = new Sequelize(
+        `postgres://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${tenantSlug}`
+      );
+      
+      // Run migrations
+      await tenantDb.authenticate();
+      await tenantDb.sync();
+      
+      return tenantDb;
+    } finally {
+      await client.end();
+    }
   }
 }
 

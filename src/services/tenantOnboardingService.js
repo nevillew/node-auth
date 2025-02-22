@@ -11,19 +11,47 @@ class TenantOnboardingService {
         name: 'Admin',
         description: 'Full access to all features',
         tenantId,
-        isDefault: false
+        isDefault: false,
+        scopes: ['read', 'write', 'delete', 'admin']
       },
       {
         name: 'Member',
         description: 'Standard user access',
         tenantId,
-        isDefault: true
+        isDefault: true,
+        scopes: ['read', 'write']
+      },
+      {
+        name: 'Viewer',
+        description: 'Read-only access',
+        tenantId,
+        isDefault: false,
+        scopes: ['read']
       }
     ]);
 
-    // Update onboarding status
+    // Create default security policy
     await tenantDb.models.Tenant.update(
-      { onboardingStatus: 'in_progress' },
+      { 
+        onboardingStatus: 'in_progress',
+        securityPolicy: {
+          password: {
+            minLength: 8,
+            requireUppercase: true,
+            requireLowercase: true,
+            requireNumbers: true,
+            requireSpecialChars: true,
+            preventPasswordReuse: 3,
+            expiryDays: 90
+          },
+          session: {
+            maxConcurrentSessions: 3,
+            sessionTimeout: 3600,
+            extendOnActivity: true,
+            requireMFA: false
+          }
+        }
+      },
       { where: { id: tenantId } }
     );
 

@@ -7,12 +7,17 @@ class TenantController {
     try {
       const { name, slug = uuidv4(), features = {}, securityPolicy = {} } = req.body;
       
+      // Create tenant database
+      await manager.createTenantDatabase(slug);
+
+      // Create tenant record
       const tenant = await Tenant.create({
         name,
         slug,
         databaseUrl: `postgres://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${slug}`,
         features,
-        securityPolicy
+        securityPolicy,
+        onboardingStatus: 'pending'
       });
 
       // Create admin user relationship
@@ -22,7 +27,16 @@ class TenantController {
         roles: ['admin']
       });
 
-      res.status(201).json(tenant);
+      // Start onboarding process
+      await tenantOnboardingService.startOnboarding(tenant.id);
+
+      res.status(201).json({
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        status: tenant.status,
+        onboardingStatus: tenant.onboardingStatus
+      });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
