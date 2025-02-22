@@ -559,7 +559,7 @@ router.post('/2fa/setup', authenticateHandler, async (req, res) => {
 });
 
 // 2FA verify setup
-router.post('/2fa/verify', authenticateHandler, async (req, res) => {
+router.post('/2fa/verify', authenticateHandler, twoFactorFailedAttemptLimiter, async (req, res) => {
   try {
     const { token } = req.body;
     const user = await User.findByPk(req.user.id);
@@ -606,7 +606,7 @@ router.post('/2fa/disable', authenticateHandler, async (req, res) => {
 });
 
 // 2FA login
-router.post('/2fa/login', async (req, res) => {
+router.post('/2fa/login', twoFactorFailedAttemptLimiter, async (req, res) => {
   try {
     const { email, password, token, type = 'totp' } = req.body;
     

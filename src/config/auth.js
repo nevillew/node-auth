@@ -26,6 +26,28 @@ const passkeyRegistrationLimiter = rateLimit({
   keyGenerator: (req) => `${req.user?.id || req.ip}:passkey-registration`
 });
 
+const twoFactorFailedAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per IP
+  message: 'Too many failed 2FA attempts, please try again later',
+  handler: async (req, res) => {
+    await SecurityAuditLog.create({
+      userId: req.user?.id,
+      event: 'TWO_FACTOR_RATE_LIMIT',
+      severity: 'high',
+      details: {
+        ip: req.ip,
+        attempts: 5
+      }
+    });
+    res.status(429).json({ 
+      error: 'Too many failed attempts',
+      retryAfter: req.rateLimit.resetTime
+    });
+  },
+  keyGenerator: (req) => `${req.ip}:2fa-attempts`
+});
+
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 login attempts per window
