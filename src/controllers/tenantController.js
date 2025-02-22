@@ -27,8 +27,23 @@ class TenantController {
         roles: ['admin']
       });
 
-      // Start onboarding process
-      await tenantOnboardingService.startOnboarding(tenant.id);
+      // Start onboarding and send notifications
+      await Promise.all([
+        tenantOnboardingService.startOnboarding(tenant.id),
+        slackService.sendMessage({
+          channel: '#tenant-activity',
+          text: `New tenant created: ${tenant.name}`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*New Tenant Created*\nName: ${tenant.name}\nCreated by: ${req.user.email}`
+              }
+            }
+          ]
+        })
+      ]);
 
       res.status(201).json({
         id: tenant.id,
@@ -298,7 +313,23 @@ class TenantController {
         )
       ));
 
-      await t.commit();
+      await Promise.all([
+        t.commit(),
+        slackService.sendMessage({
+          channel: '#tenant-activity',
+          text: `Tenant suspended: ${tenant.name}`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*Tenant Suspended*\nName: ${tenant.name}\nReason: ${reason}\nSuspended by: ${req.user.email}`
+              }
+            }
+          ]
+        })
+      ]);
+
       res.json({
         id: tenant.id,
         status: 'suspended',
@@ -377,7 +408,23 @@ class TenantController {
         })
       ));
 
-      await t.commit();
+      await Promise.all([
+        t.commit(),
+        slackService.sendMessage({
+          channel: '#tenant-activity',
+          text: `Tenant pending deletion: ${tenant.name}`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*Tenant Pending Deletion*\nName: ${tenant.name}\nScheduled for: ${deletionDate.toISOString()}\nRequested by: ${req.user.email}`
+              }
+            }
+          ]
+        })
+      ]);
+
       res.json({
         message: `Tenant scheduled for deletion in ${tenant.gracePeriodDays} days`,
         deletionDate

@@ -3,11 +3,13 @@ const Joi = require('joi');
 const getPasswordValidation = async (tenantId) => {
   const tenant = await Tenant.findByPk(tenantId);
   const policy = tenant?.securityPolicy?.password || {
-    minLength: 8,
+    minLength: 12,
     requireUppercase: true,
     requireLowercase: true,
     requireNumbers: true,
-    requireSpecialChars: true
+    requireSpecialChars: true,
+    preventPasswordReuse: 3,
+    expiryDays: 90
   };
 
   let pattern = '^';
@@ -17,7 +19,10 @@ const getPasswordValidation = async (tenantId) => {
   if (policy.requireSpecialChars) pattern += '(?=.*[@$!%*?&])';
   pattern += `.{${policy.minLength},}$`;
 
-  return pattern;
+  return {
+    pattern,
+    policy
+  };
 };
 
 const createUserSchema = async (tenantId) => Joi.object({

@@ -328,13 +328,32 @@ class UserController {
         severity: 'medium'
       }, { transaction: t });
 
-      // Send verification email
+      // Send verification and welcome emails
       const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-      await emailService.sendVerificationEmail(
-        user.email,
-        user.name,
-        verificationUrl
-      );
+      await Promise.all([
+        emailService.sendVerificationEmail(
+          user.email,
+          user.name,
+          verificationUrl
+        ),
+        emailService.sendWelcomeEmail(
+          user.email,
+          user.name
+        ),
+        slackService.sendMessage({
+          channel: '#user-activity',
+          text: `New user created: ${user.email}`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `*New User Created*\nEmail: ${user.email}\nName: ${user.name}`
+              }
+            }
+          ]
+        })
+      ]);
 
       await t.commit();
       
