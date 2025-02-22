@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { manager } = require('../config/database');
 
+/**
+ * Health check endpoint to verify system status
+ * @route GET /health
+ * @param {express.Request} req - Express request object
+ * @param {express.Response} res - Express response object
+ * @returns {Promise<void>} JSON response with health status
+ */
 router.get('/health', async (req, res) => {
   try {
     // Check database connection
