@@ -1,19 +1,6 @@
 const { Sequelize } = require('sequelize');
 const { createRedisClient, releaseRedisClient } = require('./redis');
 
-// Enhanced connection pool management
-const releaseRedisClient = (client) => {
-  if (redisPool.length < MAX_POOL_SIZE) {
-    // Reset client state before returning to pool
-    client.select(0);
-    redisPool.push(client);
-  } else {
-    client.quit();
-    if (client.replica) {
-      client.replica.quit();
-    }
-  }
-};
 
 // Redis monitoring setup
 const setupRedisMonitoring = async () => {
