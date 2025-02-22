@@ -327,7 +327,7 @@ Content-Type: application/json
 ```
 
 ## Related Documentation
-- Access Control Guide
-- Permission Management Guide
-- Audit Log Guide
-- Security Policies
+- [Access Control Guide](../technical/access-control-guide.md)
+- [Permission Management Guide](../technical/permission-management.md)
+- [Audit Log Guide](../technical/audit-log-guide.md)
+- [Security Policies](../security-policies.md)
