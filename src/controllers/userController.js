@@ -436,13 +436,24 @@ class UserController {
 
       await t.commit();
       
-      res.status(201).json({
+      const response = {
         id: user.id,
         email: user.email,
         name: user.name,
         avatar: user.avatar,
         status: user.status
-      });
+      };
+
+      if (req.impersonator) {
+        response.isImpersonated = true;
+        response.impersonator = {
+          id: req.impersonator.id,
+          email: req.impersonator.email,
+          name: req.impersonator.name
+        };
+      }
+
+      res.status(201).json(response);
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
