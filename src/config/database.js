@@ -3,18 +3,11 @@ const redis = require('redis');
 const { createClient } = require('redis');
 require('dotenv').config();
 
-// Redis client factory
-const redis = require('redis');
-const { createClient } = require('redis');
-const { promisify } = require('util');
+// Redis configuration moved to separate redis.js file
+const { createRedisClient, releaseRedisClient } = require('./redis');
+const REDIS_NAMESPACE = process.env.REDIS_NAMESPACE || 'mt:';
 
-// Redis connection pool
-const redisPool = [];
-const MAX_POOL_SIZE = process.env.REDIS_POOL_SIZE || 10;
-const REDIS_NAMESPACE = process.env.REDIS_NAMESPACE || 'mt:'; // Multi-tenant namespace
-
-// Enhanced Redis client factory
-const createRedisClient = async () => {
+const getRedisClient = async () => {
   if (redisPool.length > 0) {
     return redisPool.pop();
   }

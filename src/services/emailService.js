@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const mg = require('nodemailer-mailgun-transport');
+const logger = require('../config/logger');
 const handlebars = require('handlebars');
 const fs = require('fs');
 const path = require('path');
