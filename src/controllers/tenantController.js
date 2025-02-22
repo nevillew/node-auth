@@ -61,6 +61,33 @@ class TenantController {
   }
 
   // Get tenant login history
+  async getIpRestrictions(req, res) {
+    try {
+      const tenant = await Tenant.findByPk(req.params.id);
+      
+      if (!tenant) {
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
+
+      const ipRestrictions = tenant.securityPolicy?.ipRestrictions || {
+        enabled: false,
+        allowedIPs: [],
+        allowedRanges: [],
+        blockList: []
+      };
+
+      res.json({
+        enabled: ipRestrictions.enabled,
+        allowedIPs: ipRestrictions.allowedIPs,
+        allowedRanges: ipRestrictions.allowedRanges,
+        blockList: ipRestrictions.blockList
+      });
+    } catch (error) {
+      logger.error('IP restrictions retrieval failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   async getLoginHistory(req, res) {
     try {
       const { 
