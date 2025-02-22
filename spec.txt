@@ -1,0 +1,7801 @@
+# Tenant Data Isolation Implementation
+
+## Database Isolation
+
+### Tenant Context Middleware
+```typescript
+// middleware/tenant-context.ts
+export class TenantContext {
+  private static namespaceKey = 'tenant-context';
+  private static namespace = createNamespace(TenantContext.namespaceKey);
+
+  static getCurrentTenant(): string | undefined {
+    return TenantContext.namespace.get('tenantId');
+  }
+
+  static setCurrentTenant(tenantId: string): void {
+    TenantContext.namespace.set('tenantId', tenantId);
+  }
+
+  static clear(): void {
+    TenantContext.namespace.set('tenantId', undefined);
+  }
+}
+
+export const tenantContextMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  const tenantId = req.headers['x-tenant-id'];
+  
+  if (!tenantId) {
+    throw new AppError('TENANT_REQUIRED', 'Tenant ID is required');
+  }
+
+  TenantContext.namespace.run(() => {
+    TenantContext.setCurrentTenant(tenantId as string);
+    next();
+  });
+};
+```
+
+### Database Query Isolation
+```typescript
+// models/base.model.ts
+export class BaseModel extends Model {
+  static addTenantScope(): void {
+    this.addScope('tenant', {
+      where: {
+        tenantId: TenantContext.getCurrentTenant()
+      }
+    });
+  }
+
+  static beforeFind(options: FindOptions): void {
+    const tenantId = TenantContext.getCurrentTenant();
+    if (!tenantId) return;
+
+    if (!options.where) {
+      options.where = {};
+    }
+
+    // Add tenant filter
+    (options.where as any).tenantId = tenantId;
+  }
+
+  static beforeCreate(instance: any): void {
+    const tenantId = TenantContext.getCurrentTenant();
+    if (tenantId) {
+      instance.tenantId = tenantId;
+    }
+  }
+}
+
+// Example model with tenant isolation
+export class Document extends BaseModel {
+  public id!: string;
+  public tenantId!: string;
+  public name!: string;
+  public content!: string;
+
+  static initialize(sequelize: Sequelize): void {
+    super.init({
+      id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
+      },
+      tenantId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        references: {
+          model: 'tenants',
+          key: 'id'
+        }
+      },
+      name: DataTypes.STRING,
+      content: DataTypes.TEXT
+    }, {
+      sequelize,
+      tableName: 'documents',
+      hooks: {
+        beforeFind: BaseModel.beforeFind,
+        beforeCreate: BaseModel.beforeCreate
+      }
+    });
+
+    this.addTenantScope();
+  }
+}
+```
+
+## Cache Isolation
+
+### Redis Cache Isolation
+```typescript
+// services/cache.service.ts
+export class TenantAwareCacheService {
+  private readonly redis: Redis;
+
+  constructor() {
+    this.redis = new Redis(process.env.REDIS_URL);
+  }
+
+  private getTenantKey(key: string): string {
+    const tenantId = TenantContext.getCurrentTenant();
+    return `tenant:${tenantId}:${key}`;
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    const tenantKey = this.getTenantKey(key);
+    const value = await this.redis.get(tenantKey);
+    return value ? JSON.parse(value) : null;
+  }
+
+  async set(
+    key: string,
+    value: any,
+    ttl?: number
+  ): Promise<void> {
+    const tenantKey = this.getTenantKey(key);
+    const serialized = JSON.stringify(value);
+
+    if (ttl) {
+      await this.redis.setex(tenantKey, ttl, serialized);
+    } else {
+      await this.redis.set(tenantKey, serialized);
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    const tenantKey = this.getTenantKey(key);
+    await this.redis.del(tenantKey);
+  }
+
+  async clearTenantCache(): Promise<void> {
+    const tenantId = TenantContext.getCurrentTenant();
+    const pattern = `tenant:${tenantId}:*`;
+    
+    const keys = await this.redis.keys(pattern);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+}
+```
+
+## Storage Isolation
+
+### File Storage Isolation
+```typescript
+// services/storage.service.ts
+export class TenantAwareStorageService {
+  private readonly s3: AWS.S3;
+
+  constructor() {
+    this.s3 = new AWS.S3({
+      region: process.env.AWS_REGION
+    });
+  }
+
+  private getTenantPath(path: string): string {
+    const tenantId = TenantContext.getCurrentTenant();
+    return `tenants/${tenantId}/${path}`;
+  }
+
+  async uploadFile(
+    file: Buffer,
+    path: string,
+    metadata: Record<string, string>
+  ): Promise<string> {
+    const tenantPath = this.getTenantPath(path);
+
+    await this.s3.putObject({
+      Bucket: process.env.S3_BUCKET!,
+      Key: tenantPath,
+      Body: file,
+      Metadata: {
+        ...metadata,
+        tenantId: TenantContext.getCurrentTenant()!
+      }
+    }).promise();
+
+    return tenantPath;
+  }
+
+  async getFile(path: string): Promise<Buffer> {
+    const tenantPath = this.getTenantPath(path);
+
+    const result = await this.s3.getObject({
+      Bucket: process.env.S3_BUCKET!,
+      Key: tenantPath
+    }).promise();
+
+    // Verify tenant ID in metadata
+    const fileTenantId = result.Metadata?.tenantId;
+    if (fileTenantId !== TenantContext.getCurrentTenant()) {
+      throw new AppError('UNAUTHORIZED', 'File access denied');
+    }
+
+    return result.Body as Buffer;
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    const tenantPath = this.getTenantPath(path);
+
+    await this.s3.deleteObject({
+      Bucket: process.env.S3_BUCKET!,
+      Key: tenantPath
+    }).promise();
+  }
+}
+```
+
+## API Isolation
+
+### Request Validation
+```typescript
+// middleware/tenant-validation.ts
+export const validateTenantAccess = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const tenantId = req.headers['x-tenant-id'];
+  const user = req.user;
+
+  try {
+    // Verify tenant exists
+    const tenant = await Tenant.findByPk(tenantId as string);
+    if (!tenant) {
+      throw new AppError('TENANT_NOT_FOUND', 'Tenant not found');
+    }
+
+    // Verify tenant is active
+    if (tenant.status !== 'active') {
+      throw new AppError('TENANT_INACTIVE', 'Tenant is not active');
+    }
+
+    // Verify user has access to tenant
+    const hasAccess = await TenantUserMapping.findOne({
+      where: {
+        userId: user.id,
+        tenantId: tenantId,
+        status: 'active'
+      }
+    });
+
+    if (!hasAccess) {
+      throw new AppError('UNAUTHORIZED', 'User does not have access to tenant');
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+```
+
+### Cross-Tenant Access Control
+```typescript
+// middleware/cross-tenant-access.ts
+export const crossTenantAccessControl = (
+  allowedRoles: string[] = []
+) => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    const sourceTenantId = req.headers['x-tenant-id'];
+    const targetTenantId = req.params.tenantId || req.body.tenantId;
+
+    // Skip if same tenant
+    if (sourceTenantId === targetTenantId) {
+      return next();
+    }
+
+    try {
+      // Check if user has cross-tenant access
+      const hasAccess = await CrossTenantPermissionService.validateAccess({
+        userId: req.user.id,
+        sourceTenantId: sourceTenantId as string,
+        targetTenantId: targetTenantId as string,
+        roles: allowedRoles
+      });
+
+      if (!hasAccess) {
+        throw new AppError('UNAUTHORIZED', 'Cross-tenant access denied');
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+```
+
+## Audit Logging
+
+### Tenant-Aware Audit Logging
+```typescript
+// services/audit-logger.service.ts
+export class TenantAwareAuditLogger {
+  async log(event: AuditEvent): Promise<void> {
+    const tenantId = TenantContext.getCurrentTenant();
+    
+    const enrichedEvent = {
+      ...event,
+      tenantId,
+      timestamp: new Date(),
+      actor: {
+        userId: event.userId,
+        tenantId: tenantId
+      },
+      metadata: {
+        ...event.metadata,
+        sourceIp: event.metadata.ip,
+        userAgent: event.metadata.userAgent
+      }
+    };
+
+    // Store in tenant-specific audit log
+    await AuditLog.create(enrichedEvent);
+
+    // If cross-tenant operation, log in both tenants
+    if (event.targetTenantId && event.targetTenantId !== tenantId) {
+      await this.logCrossTenantEvent(enrichedEvent);
+    }
+  }
+
+  private async logCrossTenantEvent(
+    event: EnrichedAuditEvent
+  ): Promise<void> {
+    // Switch tenant context
+    TenantContext.setCurrentTenant(event.targetTenantId);
+
+    // Log in target tenant
+    await AuditLog.create({
+      ...event,
+      tenantId: event.targetTenantId,
+      metadata: {
+        ...event.metadata,
+        sourceTenantId: event.tenantId
+      }
+    });
+
+    // Restore original tenant context
+    TenantContext.setCurrentTenant(event.tenantId);
+  }
+}
+```
+
+## Configuration
+
+### Application Configuration
+```typescript
+// config/tenant-isolation.config.ts
+export const tenantIsolationConfig = {
+  database: {
+    enforceFilter: true,
+    allowCrossQuery: false,
+    excludedModels: ['Tenant', 'User']
+  },
+  cache: {
+    prefix: 'tenant',
+    ttl: 3600,
+    maxSize: 1000
+  },
+  storage: {
+    enforceIsolation: true,
+    pathPrefix: 'tenants',
+    allowedTypes: ['image/*', 'application/pdf']
+  },
+  security: {
+    requireTenantHeader: true,
+    validateAccess: true,
+    auditCrossTenant: true
+  }
+};
+```
+
+This implementation provides:
+
+1. Database Isolation:
+   - Automatic tenant filtering
+   - Scope-based isolation
+   - Query validation
+
+2. Cache Isolation:
+   - Tenant-specific keys
+   - Isolated cache spaces
+   - Cache clearing
+
+3. Storage Isolation:
+   - Tenant-specific paths
+   - Access validation
+   - Metadata verification
+
+4. API Isolation:
+   - Request validation
+   - Cross-tenant access control
+   - Audit logging
+
+Would you like me to:
+1. Add more security measures?
+2. Implement tenant data migration?
+3. Add backup isolation?
+4. Implement resource quotas?# Cross-Tenant User Management
+
+## Core Models and Types
+
+```typescript
+// models/cross-tenant-user.ts
+export class CrossTenantUser extends Model {
+  public id!: string;
+  public globalUserId!: string;
+  public primaryTenantId!: string;
+  public status!: 'active' | 'inactive';
+  public settings!: object;
+  public metadata!: object;
+}
+
+// models/tenant-user-mapping.ts
+export class TenantUserMapping extends Model {
+  public id!: string;
+  public globalUserId!: string;
+  public tenantId!: string;
+  public roles!: string[];
+  public status!: 'active' | 'pending' | 'suspended';
+  public joinedAt!: Date;
+  public expiresAt?: Date;
+  public invitedBy?: string;
+}
+
+// models/cross-tenant-role.ts
+export class CrossTenantRole extends Model {
+  public id!: string;
+  public name!: string;
+  public description?: string;
+  public permissions!: string[];
+  public isGlobal!: boolean;
+  public allowedTenants?: string[];
+  public metadata!: object;
+}
+```
+
+## Cross-Tenant User Service
+
+```typescript
+// services/cross-tenant-user.service.ts
+export class CrossTenantUserService {
+  private readonly userService: UserService;
+  private readonly tenantService: TenantService;
+  private readonly notificationService: NotificationService;
+
+  async createGlobalUser(data: CreateGlobalUserDTO): Promise<CrossTenantUser> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Create global user record
+      const globalUser = await CrossTenantUser.create({
+        primaryTenantId: data.primaryTenantId,
+        status: 'active',
+        settings: data.settings || {},
+        metadata: {
+          createdAt: new Date(),
+          createdBy: data.createdBy
+        }
+      }, { transaction });
+
+      // Create user in primary tenant
+      const primaryTenantUser = await this.userService.createUser({
+        ...data.userData,
+        tenantId: data.primaryTenantId
+      }, transaction);
+
+      // Link global user to primary tenant user
+      await TenantUserMapping.create({
+        globalUserId: globalUser.id,
+        tenantId: data.primaryTenantId,
+        roles: data.roles,
+        status: 'active',
+        joinedAt: new Date()
+      }, { transaction });
+
+      await transaction.commit();
+      return globalUser;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async addUserToTenant(params: {
+    globalUserId: string;
+    tenantId: string;
+    roles: string[];
+    invitedBy: string;
+  }): Promise<TenantUserMapping> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Check if user already exists in tenant
+      const existingMapping = await TenantUserMapping.findOne({
+        where: {
+          globalUserId: params.globalUserId,
+          tenantId: params.tenantId
+        }
+      });
+
+      if (existingMapping) {
+        throw new Error('User already exists in tenant');
+      }
+
+      // Get global user data
+      const globalUser = await CrossTenantUser.findByPk(params.globalUserId);
+      if (!globalUser) {
+        throw new Error('Global user not found');
+      }
+
+      // Create user in new tenant
+      const tenantUser = await this.userService.createUser({
+        email: globalUser.email,
+        name: globalUser.name,
+        tenantId: params.tenantId
+      }, transaction);
+
+      // Create tenant mapping
+      const mapping = await TenantUserMapping.create({
+        globalUserId: params.globalUserId,
+        tenantId: params.tenantId,
+        roles: params.roles,
+        status: 'pending',
+        invitedBy: params.invitedBy,
+        joinedAt: new Date()
+      }, { transaction });
+
+      // Send notification
+      await this.notificationService.sendTenantInvitation({
+        userId: params.globalUserId,
+        tenantId: params.tenantId,
+        invitedBy: params.invitedBy
+      });
+
+      await transaction.commit();
+      return mapping;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async switchTenant(
+    globalUserId: string,
+    newTenantId: string
+  ): Promise<void> {
+    // Verify user has access to tenant
+    const mapping = await TenantUserMapping.findOne({
+      where: {
+        globalUserId,
+        tenantId: newTenantId,
+        status: 'active'
+      }
+    });
+
+    if (!mapping) {
+      throw new Error('User does not have access to tenant');
+    }
+
+    // Update session with new tenant context
+    await this.sessionService.updateTenantContext(
+      globalUserId,
+      newTenantId
+    );
+  }
+
+  async getUserTenants(
+    globalUserId: string
+  ): Promise<TenantUserMapping[]> {
+    return await TenantUserMapping.findAll({
+      where: {
+        globalUserId,
+        status: 'active'
+      },
+      include: [{
+        model: Tenant,
+        attributes: ['name', 'slug', 'settings']
+      }]
+    });
+  }
+}
+```
+
+## Cross-Tenant Role Management
+
+```typescript
+// services/cross-tenant-role.service.ts
+export class CrossTenantRoleService {
+  async createGlobalRole(data: CreateGlobalRoleDTO): Promise<CrossTenantRole> {
+    const role = await CrossTenantRole.create({
+      name: data.name,
+      description: data.description,
+      permissions: data.permissions,
+      isGlobal: true,
+      allowedTenants: data.allowedTenants,
+      metadata: {
+        createdAt: new Date(),
+        createdBy: data.createdBy
+      }
+    });
+
+    // Sync role to specified tenants
+    if (data.allowedTenants) {
+      await this.syncRoleToTenants(role.id, data.allowedTenants);
+    }
+
+    return role;
+  }
+
+  async syncRoleToTenants(
+    roleId: string,
+    tenantIds: string[]
+  ): Promise<void> {
+    const role = await CrossTenantRole.findByPk(roleId);
+    if (!role) {
+      throw new Error('Role not found');
+    }
+
+    const transaction = await sequelize.transaction();
+
+    try {
+      for (const tenantId of tenantIds) {
+        await TenantRole.create({
+          name: role.name,
+          description: role.description,
+          permissions: role.permissions,
+          tenantId,
+          globalRoleId: role.id
+        }, { transaction });
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+}
+```
+
+## API Endpoints
+
+```typescript
+// routes/cross-tenant.routes.ts
+router.post('/users/global',
+  authorize('global:users:create'),
+  async (req, res) => {
+    const globalUser = await crossTenantUserService.createGlobalUser(req.body);
+    res.status(201).json(globalUser);
+  }
+);
+
+router.post('/users/:userId/tenants',
+  authorize('global:users:manage'),
+  async (req, res) => {
+    const mapping = await crossTenantUserService.addUserToTenant({
+      globalUserId: req.params.userId,
+      ...req.body
+    });
+    res.status(201).json(mapping);
+  }
+);
+
+router.post('/users/:userId/switch-tenant',
+  authorize('global:users:switch-tenant'),
+  async (req, res) => {
+    await crossTenantUserService.switchTenant(
+      req.params.userId,
+      req.body.tenantId
+    );
+    res.status(200).json({ success: true });
+  }
+);
+
+router.get('/users/:userId/tenants',
+  authorize('global:users:read'),
+  async (req, res) => {
+    const tenants = await crossTenantUserService.getUserTenants(
+      req.params.userId
+    );
+    res.status(200).json(tenants);
+  }
+);
+```
+
+## Session Management
+
+```typescript
+// services/session.service.ts
+export class SessionService {
+  async updateTenantContext(
+    globalUserId: string,
+    newTenantId: string
+  ): Promise<void> {
+    const session = await this.getCurrentSession();
+    
+    session.tenantContext = {
+      tenantId: newTenantId,
+      switchedAt: new Date(),
+      previousTenantId: session.tenantContext?.tenantId
+    };
+
+    await this.redis.set(
+      `session:${session.id}`,
+      JSON.stringify(session),
+      'EX',
+      86400
+    );
+
+    // Log tenant switch for audit
+    await this.auditLogger.log({
+      type: 'tenant_switch',
+      userId: globalUserId,
+      oldTenantId: session.tenantContext?.previousTenantId,
+      newTenantId
+    });
+  }
+}
+```
+
+## Permission Management
+
+```typescript
+// services/cross-tenant-permission.service.ts
+export class CrossTenantPermissionService {
+  async validateUserAccess(
+    globalUserId: string,
+    tenantId: string,
+    permission: string
+  ): Promise<boolean> {
+    // Get user's roles in tenant
+    const mapping = await TenantUserMapping.findOne({
+      where: {
+        globalUserId,
+        tenantId,
+        status: 'active'
+      }
+    });
+
+    if (!mapping) {
+      return false;
+    }
+
+    // Get permissions for roles
+    const roles = await CrossTenantRole.findAll({
+      where: {
+        id: { [Op.in]: mapping.roles }
+      }
+    });
+
+    // Check if any role has the required permission
+    return roles.some(role =>
+      role.permissions.includes(permission) ||
+      role.permissions.includes('*')
+    );
+  }
+}
+```
+
+This implementation provides:
+
+1. Global User Management:
+   - Create global users
+   - Link users to multiple tenants
+   - Manage tenant-specific roles
+   - Handle tenant switching
+
+2. Cross-Tenant Roles:
+   - Global role definitions
+   - Role synchronization across tenants
+   - Permission inheritance
+   - Tenant-specific overrides
+
+3. Session Management:
+   - Tenant context switching
+   - Session persistence
+   - Audit logging
+
+4. Security:
+   - Permission validation
+   - Access control
+   - Audit trails
+
+Would you like me to:
+1. Add more API endpoints?
+2. Implement additional security features?
+3. Add data migration capabilities?
+4. Add tenant isolation features?# API Documentation
+
+## Authentication API
+
+### Token Management
+
+#### Blacklist Token
+```http
+POST /api/v1/auth/tokens/blacklist
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "token": "string",
+  "reason": "user_logout | security_event | role_change",
+  "metadata": {
+    "deviceId": "string",
+    "location": "string"
+  }
+}
+
+Response 200 OK
+{
+  "success": true,
+  "blacklistedAt": "2025-02-22T10:30:00Z"
+}
+
+Response 400 Bad Request
+{
+  "error": "INVALID_TOKEN",
+  "message": "Token is already blacklisted or invalid"
+}
+```
+
+#### Validate Token
+```http
+POST /api/v1/auth/tokens/validate
+Content-Type: application/json
+
+{
+  "token": "string"
+}
+
+Response 200 OK
+{
+  "valid": true,
+  "metadata": {
+    "userId": "string",
+    "scope": ["string"],
+    "expiresAt": "2025-02-22T10:30:00Z"
+  }
+}
+```
+
+### Password Reset
+
+#### Initiate Reset
+```http
+POST /api/v1/auth/password/reset/initiate
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+
+Response 200 OK
+{
+  "success": true,
+  "message": "If the email exists, a reset link has been sent"
+}
+
+Response 429 Too Many Requests
+{
+  "error": "RATE_LIMIT_EXCEEDED",
+  "message": "Too many reset attempts",
+  "retryAfter": 1800
+}
+```
+
+#### Complete Reset
+```http
+POST /api/v1/auth/password/reset/complete
+Content-Type: application/json
+
+{
+  "token": "string",
+  "newPassword": "string",
+  "confirmPassword": "string"
+}
+
+Response 200 OK
+{
+  "success": true,
+  "message": "Password has been reset successfully"
+}
+
+Response 400 Bad Request
+{
+  "error": "VALIDATION_ERROR",
+  "message": "Password does not meet requirements",
+  "details": {
+    "minLength": 8,
+    "requiresNumbers": true,
+    "requiresSymbols": true
+  }
+}
+```
+
+## Data Encryption API
+
+### Field Encryption
+
+#### Encrypt Data
+```http
+POST /api/v1/encryption/encrypt
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "data": "string",
+  "type": "pii | financial | general",
+  "keyVersion": "string" // optional
+}
+
+Response 200 OK
+{
+  "encryptedData": "string",
+  "keyId": "string",
+  "metadata": {
+    "algorithm": "string",
+    "keyVersion": "string",
+    "createdAt": "2025-02-22T10:30:00Z"
+  }
+}
+```
+
+#### Decrypt Data
+```http
+POST /api/v1/encryption/decrypt
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "encryptedData": "string",
+  "keyId": "string"
+}
+
+Response 200 OK
+{
+  "data": "string",
+  "metadata": {
+    "keyVersion": "string",
+    "decryptedAt": "2025-02-22T10:30:00Z"
+  }
+}
+```
+
+### Key Management
+
+#### Rotate Keys
+```http
+POST /api/v1/encryption/keys/rotate
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "keyIds": ["string"],
+  "reencrypt": boolean
+}
+
+Response 200 OK
+{
+  "success": true,
+  "rotatedKeys": ["string"],
+  "newKeyVersion": "string"
+}
+```
+
+## Rate Limiting API
+
+### Rate Limit Configuration
+
+#### Create Rule
+```http
+POST /api/v1/rate-limit/rules
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "name": "string",
+  "type": "user | ip | tenant | combined",
+  "limit": number,
+  "window": "1m | 5m | 15m | 1h | 24h",
+  "action": "block | delay | log",
+  "metadata": {
+    "scope": "string",
+    "description": "string"
+  }
+}
+
+Response 200 OK
+{
+  "id": "string",
+  "created": true,
+  "effectiveFrom": "2025-02-22T10:30:00Z"
+}
+```
+
+#### Get Current Limits
+```http
+GET /api/v1/rate-limit/status
+Authorization: Bearer {access_token}
+
+Response 200 OK
+{
+  "current": {
+    "remaining": number,
+    "reset": "2025-02-22T10:30:00Z",
+    "limit": number
+  },
+  "rules": [
+    {
+      "name": "string",
+      "current": number,
+      "limit": number,
+      "reset": "2025-02-22T10:30:00Z"
+    }
+  ]
+}
+```
+
+## Audit Logging API
+
+### Event Logging
+
+#### Create Audit Log
+```http
+POST /api/v1/audit/logs
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "type": "string",
+  "action": "create | update | delete | access",
+  "resource": {
+    "type": "string",
+    "id": "string"
+  },
+  "changes": {
+    "before": object,
+    "after": object
+  },
+  "metadata": {
+    "ip": "string",
+    "userAgent": "string",
+    "location": "string"
+  }
+}
+
+Response 200 OK
+{
+  "id": "string",
+  "recorded": true,
+  "timestamp": "2025-02-22T10:30:00Z"
+}
+```
+
+#### Search Audit Logs
+```http
+GET /api/v1/audit/logs/search
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "query": {
+    "type": ["string"],
+    "action": ["string"],
+    "resourceType": "string",
+    "resourceId": "string",
+    "dateRange": {
+      "start": "2025-02-22T00:00:00Z",
+      "end": "2025-02-22T23:59:59Z"
+    }
+  },
+  "pagination": {
+    "page": number,
+    "limit": number
+  },
+  "sort": {
+    "field": "timestamp",
+    "order": "desc"
+  }
+}
+
+Response 200 OK
+{
+  "data": [
+    {
+      "id": "string",
+      "type": "string",
+      "action": "string",
+      "resource": {
+        "type": "string",
+        "id": "string"
+      },
+      "changes": object,
+      "metadata": object,
+      "timestamp": "2025-02-22T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "total": number,
+    "page": number,
+    "limit": number,
+    "hasMore": boolean
+  }
+}
+```
+
+## Health Check API
+
+### System Health
+
+#### Get Health Status
+```http
+GET /api/v1/health
+Authorization: Bearer {access_token}
+
+Response 200 OK
+{
+  "status": "healthy | degraded | unhealthy",
+  "timestamp": "2025-02-22T10:30:00Z",
+  "checks": [
+    {
+      "name": "database",
+      "status": "healthy",
+      "responseTime": number,
+      "lastChecked": "2025-02-22T10:30:00Z"
+    },
+    {
+      "name": "redis",
+      "status": "healthy",
+      "responseTime": number,
+      "lastChecked": "2025-02-22T10:30:00Z"
+    },
+    {
+      "name": "storage",
+      "status": "healthy",
+      "responseTime": number,
+      "lastChecked": "2025-02-22T10:30:00Z"
+    }
+  ],
+  "metrics": {
+    "cpu": {
+      "usage": number,
+      "threshold": number
+    },
+    "memory": {
+      "used": number,
+      "total": number,
+      "percentage": number
+    },
+    "disk": {
+      "used": number,
+      "total": number,
+      "percentage": number
+    }
+  }
+}
+```
+
+#### Get Component Health
+```http
+GET /api/v1/health/{component}
+Authorization: Bearer {access_token}
+
+Response 200 OK
+{
+  "status": "healthy | degraded | unhealthy",
+  "details": {
+    "metric1": number,
+    "metric2": number
+  },
+  "history": [
+    {
+      "timestamp": "2025-02-22T10:30:00Z",
+      "status": "string",
+      "metrics": object
+    }
+  ]
+}
+```
+
+### Error Responses
+
+All APIs use standard HTTP status codes and return errors in the following format:
+
+```http
+Response 4XX/5XX
+{
+  "error": "ERROR_CODE",
+  "message": "Human readable message",
+  "details": {
+    // Additional error context
+  },
+  "requestId": "string",
+  "timestamp": "2025-02-22T10:30:00Z"
+}
+```
+
+Common Error Codes:
+- `UNAUTHORIZED`: Authentication required or token invalid
+- `FORBIDDEN`: Insufficient permissions
+- `VALIDATION_ERROR`: Invalid input data
+- `RATE_LIMIT_EXCEEDED`: Too many requests
+- `RESOURCE_NOT_FOUND`: Requested resource doesn't exist
+- `INTERNAL_ERROR`: Server error
+
+Would you like me to:
+1. Add more API endpoints?
+2. Include more example requests and responses?
+3. Add authentication flow documentation?
+4. Add webhook documentation?# P0 Features Technical Documentation
+
+## JWT Blacklisting System
+
+### Overview
+The JWT blacklisting system provides a secure mechanism for invalidating active JWT tokens before their natural expiration time. This is crucial for scenarios such as user logout, security breaches, or role revocation.
+
+### Key Components
+- `TokenBlacklistService`: Manages token blacklisting operations
+- Redis-based storage for performance
+- Automatic cleanup of expired entries
+
+### Usage Example
+```typescript
+// Blacklisting a token
+await tokenBlacklistService.blacklistToken(token, {
+  reason: 'user_logout',
+  userId: '123',
+  deviceId: 'device_456'
+});
+
+// Checking token status
+const isValid = await tokenBlacklistService.validateToken(token);
+```
+
+### Configuration Options
+```typescript
+export interface BlacklistConfig {
+  // Time to keep expired tokens in blacklist
+  retentionPeriod: number;
+  
+  // Redis key prefix
+  keyPrefix: string;
+  
+  // Whether to track additional metadata
+  trackMetadata: boolean;
+}
+```
+
+### Best Practices
+1. Always include JTI in tokens
+2. Keep retention period longer than token validity
+3. Monitor blacklist size
+4. Implement regular cleanup
+
+## Password Reset Security
+
+### Overview
+Enhanced password reset system with multiple security layers to prevent abuse and unauthorized access.
+
+### Security Features
+1. Rate limiting
+2. Token encryption
+3. IP tracking
+4. Device fingerprinting
+5. Suspicious activity detection
+
+### Implementation Guide
+```typescript
+// Initiating password reset
+const resetToken = await passwordResetService.initiateReset({
+  email: userEmail,
+  ip: requestIp,
+  userAgent: requestUserAgent
+});
+
+// Validating reset token
+const isValid = await passwordResetService.validateToken(token);
+```
+
+### Configuration
+```json
+{
+  "resetToken": {
+    "expirationTime": 3600,
+    "length": 32,
+    "algorithm": "sha256"
+  },
+  "rateLimiting": {
+    "maxAttempts": 3,
+    "windowSize": 3600,
+    "blockDuration": 86400
+  }
+}
+```
+
+### Security Guidelines
+1. Use secure token generation
+2. Implement progressive delays
+3. Monitor failed attempts
+4. Track IP patterns
+5. Alert on suspicious activity
+
+## Data Encryption System
+
+### Overview
+Comprehensive data encryption system for protecting sensitive information at rest.
+
+### Key Components
+1. Key Management Service
+2. Field-level Encryption
+3. Key Rotation System
+4. Encryption Decorators
+
+### Usage Example
+```typescript
+// Using encryption decorator
+class User {
+  @Encrypted()
+  public socialSecurityNumber: string;
+
+  @Encrypted()
+  public bankAccountNumber: string;
+}
+
+// Manual encryption
+const encrypted = await encryptionService.encryptField(
+  'sensitive_data',
+  {
+    keyVersion: 'latest',
+    algorithm: 'aes-256-gcm'
+  }
+);
+```
+
+### Key Management
+```typescript
+// Key rotation
+await keyManagementService.rotateKeys({
+  gracePeriod: '24h',
+  reencrypt: true
+});
+
+// Key backup
+await keyManagementService.backupKeys({
+  destination: 'secure_backup',
+  encryption: true
+});
+```
+
+### Best Practices
+1. Regular key rotation
+2. Secure key storage
+3. Backup management
+4. Access logging
+5. Performance monitoring
+
+## Advanced Rate Limiting
+
+### Overview
+Dynamic rate limiting system supporting multiple strategies and contexts.
+
+### Features
+1. Dynamic rules
+2. Multiple window types
+3. Custom limit definitions
+4. Distributed tracking
+
+### Configuration Example
+```typescript
+const rateLimitConfig = {
+  rules: [
+    {
+      name: 'api_global',
+      limit: 1000,
+      window: '1h',
+      strategy: 'sliding'
+    },
+    {
+      name: 'auth_attempts',
+      limit: 5,
+      window: '15m',
+      strategy: 'fixed',
+      blockDuration: '1h'
+    }
+  ]
+};
+```
+
+### Usage Guide
+```typescript
+// Applying rate limit
+app.use('/api', rateLimiter({
+  keyGenerator: (req) => `${req.ip}:${req.path}`,
+  handler: async (req, res) => {
+    res.status(429).json({
+      error: 'Too Many Requests',
+      retryAfter: req.rateLimit.resetTime
+    });
+  }
+}));
+```
+
+### Monitoring
+1. Track hit rates
+2. Monitor block events
+3. Alert on abuse patterns
+4. Performance impact
+
+## Audit Logging System
+
+### Overview
+Comprehensive audit logging system for tracking system activities and changes.
+
+### Event Types
+1. Authentication events
+2. Data modifications
+3. Security events
+4. System operations
+
+### Usage Example
+```typescript
+// Logging an audit event
+await auditLogger.log({
+  type: 'data_modification',
+  action: 'update',
+  resource: {
+    type: 'user',
+    id: userId
+  },
+  changes: {
+    before: oldData,
+    after: newData
+  },
+  metadata: {
+    ip: requestIp,
+    userAgent: userAgent
+  }
+});
+```
+
+### Search Capabilities
+```typescript
+// Searching audit logs
+const results = await auditQuery.search({
+  tenantId: 'tenant_123',
+  dateRange: {
+    start: startDate,
+    end: endDate
+  },
+  filters: {
+    resourceType: 'user',
+    action: 'update'
+  },
+  sort: {
+    field: 'timestamp',
+    order: 'desc'
+  }
+});
+```
+
+### Best Practices
+1. Structured logging
+2. Required metadata
+3. Performance optimization
+4. Retention policies
+5. Access controls
+
+## Health Check System
+
+### Overview
+Comprehensive health monitoring system for system components.
+
+### Check Types
+1. Database health
+2. Redis health
+3. System resources
+4. External services
+
+### Implementation
+```typescript
+// Registering health checks
+healthService.registerCheck({
+  name: 'database',
+  check: async () => {
+    await sequelize.authenticate();
+    return { status: 'healthy' };
+  }
+});
+
+// Getting health status
+const status = await healthService.check();
+```
+
+### Monitoring Setup
+```typescript
+// Configure alerts
+const alertConfig = {
+  thresholds: {
+    cpu: 80,
+    memory: 85,
+    disk: 90,
+    responseTime: 1000
+  },
+  notifications: {
+    slack: 'webhook_url',
+    email: 'admin@example.com'
+  }
+};
+```
+
+### Best Practices
+1. Regular checks
+2. Performance impact
+3. Alert thresholds
+4. Recovery procedures
+5. Documentation
+
+## Additional Resources
+
+### Monitoring Dashboard
+- CPU usage graphs
+- Memory utilization
+- Disk space monitoring
+- Network traffic analysis
+
+### Alert Configuration
+```json
+{
+  "alerts": {
+    "critical": {
+      "channels": ["slack", "email", "pager"],
+      "threshold": "immediate"
+    },
+    "warning": {
+      "channels": ["slack", "email"],
+      "threshold": "5m"
+    }
+  }
+}
+```
+
+### Deployment Checklist
+1. Key verification
+2. Security scan
+3. Performance test
+4. Backup verification
+5. Rollback plan
+
+Would you like me to:
+1. Add more detailed examples?
+2. Include troubleshooting guides?
+3. Add API documentation?
+4. Create deployment guides?## 7. Data Encryption at Rest
+
+### Components
+```typescript
+// services/encryption/key-management.service.ts
+class KeyManagementService {
+  private readonly keyStore: KeyStore;
+  private readonly vault: VaultService;
+
+  async generateDataKey(): Promise<DataKey> {
+    // Generate a new data key using KMS
+    const { plaintext, ciphertext } = await this.vault.generateDataKey();
+
+    // Store encrypted key
+    const keyRecord = await this.keyStore.create({
+      encryptedKey: ciphertext,
+      status: 'active',
+      version: await this.getNextKeyVersion(),
+      createdAt: new Date()
+    });
+
+    return {
+      keyId: keyRecord.id,
+      plaintextKey: plaintext
+    };
+  }
+
+  async rotateDataKeys(): Promise<void> {
+    const activeKeys = await this.keyStore.findActive();
+    
+    for (const key of activeKeys) {
+      // Generate new key
+      const newKey = await this.generateDataKey();
+      
+      // Re-encrypt data using new key
+      await this.reencryptData(key.id, newKey.keyId);
+      
+      // Mark old key as rotated
+      await this.keyStore.markAsRotated(key.id);
+    }
+  }
+}
+
+// services/encryption/field-encryption.service.ts
+class FieldEncryptionService {
+  private readonly keyManager: KeyManagementService;
+
+  async encryptField(value: string): Promise<EncryptedData> {
+    const dataKey = await this.keyManager.getCurrentKey();
+    const iv = crypto.randomBytes(12);
+    
+    const cipher = crypto.createCipheriv(
+      'aes-256-gcm',
+      Buffer.from(dataKey.plaintextKey, 'base64'),
+      iv
+    );
+
+    const encrypted = Buffer.concat([
+      cipher.update(value, 'utf8'),
+      cipher.final()
+    ]);
+
+    const tag = cipher.getAuthTag();
+
+    return {
+      keyId: dataKey.keyId,
+      iv: iv.toString('base64'),
+      tag: tag.toString('base64'),
+      data: encrypted.toString('base64')
+    };
+  }
+}
+
+// models/encrypted-field.decorator.ts
+function Encrypted() {
+  return function(target: any, propertyKey: string) {
+    let value: any;
+    const encryptionService = new FieldEncryptionService();
+
+    Object.defineProperty(target, propertyKey, {
+      get: function() {
+        return encryptionService.decrypt(value);
+      },
+      set: function(v: any) {
+        value = encryptionService.encrypt(v);
+      }
+    });
+  };
+}
+```
+
+## 8. Core Rate Limiting Refinement
+
+### Components
+```typescript
+// services/rate-limiting/advanced-rate-limiter.service.ts
+class AdvancedRateLimiter {
+  private readonly redis: RedisService;
+  private readonly rules: Map<string, RateLimitRule>;
+
+  async checkLimit(
+    context: RateLimitContext
+  ): Promise<RateLimitResult> {
+    const rules = this.getApplicableRules(context);
+    const results = await Promise.all(
+      rules.map(rule => this.evaluateRule(rule, context))
+    );
+
+    return this.consolidateResults(results);
+  }
+
+  private async evaluateRule(
+    rule: RateLimitRule,
+    context: RateLimitContext
+  ): Promise<RuleEvaluation> {
+    const key = this.buildKey(rule, context);
+    const window = await this.getTimeWindow(key, rule.windowSize);
+
+    if (window.count >= rule.limit) {
+      return {
+        allowed: false,
+        reset: window.reset,
+        rule: rule.name
+      };
+    }
+
+    await this.incrementWindow(key, window);
+    return { allowed: true, rule: rule.name };
+  }
+
+  private async getTimeWindow(
+    key: string,
+    size: number
+  ): Promise<TimeWindow> {
+    const now = Date.now();
+    const windowStart = now - (now % size);
+
+    const count = await this.redis.get(`${key}:${windowStart}`);
+    return {
+      start: windowStart,
+      count: parseInt(count || '0'),
+      reset: windowStart + size
+    };
+  }
+}
+
+// middleware/dynamic-rate-limit.ts
+class DynamicRateLimitMiddleware {
+  async handle(req: Request, res: Response, next: NextFunction) {
+    const context = this.buildContext(req);
+    const result = await this.rateLimiter.checkLimit(context);
+
+    if (!result.allowed) {
+      res.set('Retry-After', result.reset.toString());
+      throw new RateLimitExceededError(result);
+    }
+
+    this.setRateLimitHeaders(res, result);
+    next();
+  }
+
+  private buildContext(req: Request): RateLimitContext {
+    return {
+      ip: req.ip,
+      userId: req.user?.id,
+      tenantId: req.tenant?.id,
+      path: req.path,
+      method: req.method,
+      resource: this.extractResource(req),
+      attributes: {
+        userAgent: req.headers['user-agent'],
+        region: req.headers['cf-ipcountry']
+      }
+    };
+  }
+}
+```
+
+## 9. Basic Audit Logging
+
+### Components
+```typescript
+// services/audit/audit-logger.service.ts
+class AuditLogger {
+  private readonly eventStore: AuditEventStore;
+  private readonly searchService: SearchService;
+
+  async log(event: AuditEvent): Promise<void> {
+    // Enrich event with context
+    const enrichedEvent = await this.enrichEvent(event);
+
+    // Store event
+    await Promise.all([
+      this.eventStore.store(enrichedEvent),
+      this.searchService.index('audit', enrichedEvent)
+    ]);
+
+    // Check for suspicious patterns
+    await this.detectAnomalies(enrichedEvent);
+  }
+
+  private async enrichEvent(event: AuditEvent): Promise<EnrichedAuditEvent> {
+    return {
+      ...event,
+      metadata: {
+        ...event.metadata,
+        timestamp: new Date(),
+        ip: event.context.ip,
+        userAgent: event.context.userAgent,
+        sessionId: event.context.sessionId,
+        correlationId: event.context.correlationId
+      },
+      context: {
+        ...event.context,
+        resourceType: await this.resolveResourceType(event),
+        previousState: await this.getPreviousState(event),
+        changes: await this.calculateChanges(event)
+      }
+    };
+  }
+
+  private async detectAnomalies(event: EnrichedAuditEvent): Promise<void> {
+    const patterns = await this.loadAnomalyPatterns(event.type);
+    for (const pattern of patterns) {
+      if (await pattern.matches(event)) {
+        await this.reportAnomaly(pattern, event);
+      }
+    }
+  }
+}
+
+// services/audit/audit-query.service.ts
+class AuditQueryService {
+  async search(params: AuditSearchParams): Promise<AuditSearchResult> {
+    const query = this.buildQuery(params);
+    const results = await this.searchService.search('audit', query);
+
+    return {
+      events: results.hits,
+      total: results.total,
+      aggregations: await this.calculateAggregations(results)
+    };
+  }
+
+  private buildQuery(params: AuditSearchParams): SearchQuery {
+    return {
+      bool: {
+        must: [
+          { term: { tenantId: params.tenantId } },
+          { range: { timestamp: { gte: params.startDate, lte: params.endDate } } },
+          ...this.buildFilters(params.filters)
+        ],
+        should: this.buildTextSearch(params.searchText)
+      }
+    };
+  }
+}
+```
+
+## 10. Essential Health Checks
+
+### Components
+```typescript
+// services/health/health-check.service.ts
+class HealthCheckService {
+  private readonly checks: HealthCheck[] = [];
+  private readonly cache: CacheService;
+
+  registerCheck(check: HealthCheck): void {
+    this.checks.push(check);
+  }
+
+  async performHealthCheck(): Promise<HealthCheckResult> {
+    const results = await Promise.all(
+      this.checks.map(check => this.runCheck(check))
+    );
+
+    const status = this.determineOverallStatus(results);
+    await this.cacheResults(status, results);
+
+    return {
+      status,
+      timestamp: new Date(),
+      checks: results,
+      meta: await this.getSystemMetadata()
+    };
+  }
+
+  private async runCheck(check: HealthCheck): Promise<CheckResult> {
+    const startTime = process.hrtime();
+
+    try {
+      await check.execute();
+      const duration = this.calculateDuration(startTime);
+
+      return {
+        name: check.name,
+        status: 'healthy',
+        duration,
+        timestamp: new Date()
+      };
+    } catch (error) {
+      return {
+        name: check.name,
+        status: 'unhealthy',
+        error: error.message,
+        timestamp: new Date()
+      };
+    }
+  }
+}
+
+// services/health/database-health.check.ts
+class DatabaseHealthCheck implements HealthCheck {
+  async execute(): Promise<void> {
+    const startTime = Date.now();
+    
+    // Check connection
+    await sequelize.authenticate();
+
+    // Check query performance
+    const queryTime = await this.checkQueryPerformance();
+    if (queryTime > 1000) {
+      throw new Error('Database query performance degraded');
+    }
+
+    // Check connection pool
+    const poolStats = await this.getConnectionPoolStats();
+    if (poolStats.available / poolStats.total < 0.2) {
+      throw new Error('Connection pool nearly exhausted');
+    }
+  }
+
+  private async checkQueryPerformance(): Promise<number> {
+    const start = Date.now();
+    await sequelize.query('SELECT 1');
+    return Date.now() - start;
+  }
+}
+
+// services/health/redis-health.check.ts
+class RedisHealthCheck implements HealthCheck {
+  async execute(): Promise<void> {
+    // Check connection
+    await this.redis.ping();
+
+    // Check memory usage
+    const info = await this.redis.info('memory');
+    const usedMemory = this.parseMemoryInfo(info);
+    
+    if (usedMemory.usedPercentage > 90) {
+      throw new Error('Redis memory usage critical');
+    }
+
+    // Check key space
+    const keyspace = await this.redis.info('keyspace');
+    if (this.isKeyspaceWarning(keyspace)) {
+      throw new Error('Redis keyspace warning');
+    }
+  }
+}
+
+// services/health/system-health.check.ts
+class SystemHealthCheck implements HealthCheck {
+  async execute(): Promise<void> {
+    // Check CPU usage
+    const cpuUsage = await this.getCPUUsage();
+    if (cpuUsage > 80) {
+      throw new Error('High CPU usage');
+    }
+
+    // Check memory usage
+    const memoryUsage = await this.getMemoryUsage();
+    if (memoryUsage.usedPercentage > 85) {
+      throw new Error('High memory usage');
+    }
+
+    // Check disk space
+    const diskUsage = await this.getDiskUsage();
+    if (diskUsage.usedPercentage > 90) {
+      throw new Error('Low disk space');
+    }
+  }
+}
+```
+
+Key Features:
+
+1. Data Encryption:
+   - Key management with rotation
+   - Field-level encryption
+   - Transparent encryption/decryption
+   - Key versioning
+
+2. Rate Limiting:
+   - Dynamic rule evaluation
+   - Multiple limit types
+   - Custom window sizes
+   - Distributed rate limiting
+
+3. Audit Logging:
+   - Event enrichment
+   - Anomaly detection
+   - Search capabilities
+   - Event aggregation
+
+4. Health Checks:
+   - Database health monitoring
+   - Redis health monitoring
+   - System resource monitoring
+   - Performance metrics
+
+Would you like me to:
+1. Add integration tests for these components?
+2. Add more monitoring metrics?
+3. Implement additional security features?
+4. Add deployment configurations?# P0 Priority Implementation Plan
+
+## 1. JWT Blacklisting Mechanism
+
+### Components Needed
+```typescript
+// models/token-blacklist.ts
+interface BlacklistedToken {
+  jti: string;
+  reason: string;
+  expiresAt: Date;
+  blacklistedAt: Date;
+  blacklistedBy?: string;
+}
+
+// services/token-blacklist.service.ts
+class TokenBlacklistService {
+  private readonly redis: RedisService;
+
+  async blacklistToken(token: JWT, reason: string): Promise<void> {
+    const key = `blacklist:token:${token.jti}`;
+    await this.redis.set(key, JSON.stringify({
+      jti: token.jti,
+      reason,
+      blacklistedAt: new Date(),
+      expiresAt: new Date(token.exp * 1000)
+    }), 'PX', token.exp * 1000);
+  }
+
+  async isBlacklisted(jti: string): Promise<boolean> {
+    return await this.redis.exists(`blacklist:token:${jti}`);
+  }
+}
+```
+
+### Implementation Steps
+1. Add JTI (JWT ID) to token generation
+2. Implement Redis-based blacklist storage
+3. Add blacklist checking to token validation
+4. Create API endpoints for token revocation
+5. Add background job for blacklist cleanup
+
+### Monitoring
+- Track blacklist size
+- Monitor blacklist hits
+- Alert on unusual blacklist patterns
+
+## 2. Password Reset Workflow Hardening
+
+### Components
+```typescript
+// services/password-reset.service.ts
+class EnhancedPasswordResetService {
+  private readonly MAX_ATTEMPTS = 3;
+  private readonly LOCK_DURATION = 30 * 60; // 30 minutes
+
+  async initiateReset(email: string): Promise<void> {
+    // Rate limiting check
+    const attempts = await this.getRateLimit(email);
+    if (attempts >= this.MAX_ATTEMPTS) {
+      throw new Error('Too many reset attempts');
+    }
+
+    // Generate secure token
+    const token = crypto.randomBytes(32).toString('hex');
+    const hashedToken = await bcrypt.hash(token, 12);
+
+    // Store with expiration
+    await this.storeResetToken(email, hashedToken);
+
+    // Send email with rate limit warning
+    await this.sendResetEmail(email, token, attempts);
+  }
+
+  private async storeResetToken(email: string, hashedToken: string): Promise<void> {
+    await this.redis.setex(
+      `reset:${email}`,
+      3600,
+      JSON.stringify({
+        token: hashedToken,
+        attempts: 0,
+        createdAt: new Date()
+      })
+    );
+  }
+}
+```
+
+### Security Measures
+1. Rate limiting per email/IP
+2. Token hashing
+3. Account lockout after failed attempts
+4. IP-based suspicious activity detection
+5. Secure token delivery
+
+## 3. Advanced Brute Force Protection
+
+### Components
+```typescript
+// services/brute-force-protection.service.ts
+class BruteForceProtectionService {
+  private readonly redis: RedisService;
+
+  async trackLoginAttempt(
+    userId: string,
+    ip: string,
+    success: boolean
+  ): Promise<void> {
+    const attempt = {
+      timestamp: Date.now(),
+      ip,
+      success,
+      userAgent: req.headers['user-agent']
+    };
+
+    await Promise.all([
+      this.trackUserAttempt(userId, attempt),
+      this.trackIpAttempt(ip, attempt)
+    ]);
+  }
+
+  private async shouldBlock(
+    attempts: LoginAttempt[]
+  ): Promise<boolean> {
+    // Progressive delays based on failed attempts
+    const failedAttempts = attempts.filter(a => !a.success);
+    if (failedAttempts.length >= 5) {
+      const lastAttempt = failedAttempts[failedAttempts.length - 1];
+      const delay = Math.pow(2, failedAttempts.length - 5) * 1000; // Exponential backoff
+      return (Date.now() - lastAttempt.timestamp) < delay;
+    }
+    return false;
+  }
+}
+```
+
+### Implementation Steps
+1. Set up Redis for attempt tracking
+2. Implement IP-based rate limiting
+3. Add progressive delays
+4. Configure account lockout
+5. Add admin notifications
+
+## 4. Error Reporting and Tracking
+
+### Components
+```typescript
+// services/error-tracking.service.ts
+class ErrorTrackingService {
+  private readonly errorStore: ErrorStore;
+  private readonly notificationService: NotificationService;
+
+  async trackError(error: AppError): Promise<void> {
+    // Store error details
+    const errorRecord = await this.errorStore.create({
+      message: error.message,
+      stack: error.stack,
+      metadata: {
+        userId: error.userId,
+        tenantId: error.tenantId,
+        path: error.path,
+        timestamp: new Date()
+      }
+    });
+
+    // Check error threshold
+    await this.checkErrorThreshold(error.type);
+
+    // Notify if critical
+    if (this.isCriticalError(error)) {
+      await this.notifyTeam(errorRecord);
+    }
+  }
+
+  private async checkErrorThreshold(errorType: string): Promise<void> {
+    const count = await this.errorStore.countRecent(errorType);
+    if (count > ERROR_THRESHOLDS[errorType]) {
+      await this.triggerAlert(errorType, count);
+    }
+  }
+}
+```
+
+### Implementation Steps
+1. Set up error storage
+2. Implement error categorization
+3. Add error rate monitoring
+4. Configure alerts
+5. Create error dashboards
+
+## 5. Critical Security Logging
+
+### Components
+```typescript
+// services/security-logging.service.ts
+class SecurityLoggingService {
+  private readonly logStore: SecurityLogStore;
+  private readonly alertService: AlertService;
+
+  async logSecurityEvent(event: SecurityEvent): Promise<void> {
+    // Store event
+    await this.logStore.create({
+      type: event.type,
+      severity: event.severity,
+      userId: event.userId,
+      tenantId: event.tenantId,
+      metadata: event.metadata,
+      timestamp: new Date()
+    });
+
+    // Check security rules
+    await this.evaluateSecurityRules(event);
+
+    // Archive for compliance
+    await this.archiveEvent(event);
+  }
+
+  private async evaluateSecurityRules(event: SecurityEvent): Promise<void> {
+    const rules = await this.loadSecurityRules(event.type);
+    for (const rule of rules) {
+      if (await rule.evaluate(event)) {
+        await this.triggerSecurityAlert(rule, event);
+      }
+    }
+  }
+}
+```
+
+### Implementation Steps
+1. Set up secure log storage
+2. Implement log rotation
+3. Add log encryption
+4. Configure real-time alerts
+5. Create security dashboards
+
+## 6. Database Backup Verification
+
+### Components
+```typescript
+// services/backup-verification.service.ts
+class BackupVerificationService {
+  private readonly storageService: StorageService;
+  private readonly databaseService: DatabaseService;
+
+  async verifyBackup(backupId: string): Promise<VerificationResult> {
+    // Download backup
+    const backupFile = await this.storageService.downloadBackup(backupId);
+
+    // Create temporary database
+    const tempDb = await this.createTempDatabase();
+
+    try {
+      // Restore backup
+      await this.restoreBackup(tempDb, backupFile);
+
+      // Run verification checks
+      const results = await this.runVerificationChecks(tempDb);
+
+      // Store verification results
+      await this.storeVerificationResults(backupId, results);
+
+      return results;
+    } finally {
+      // Cleanup
+      await this.cleanupTempDatabase(tempDb);
+    }
+  }
+
+  private async runVerificationChecks(db: Database): Promise<VerificationResult> {
+    const checks = [
+      this.verifyTableStructure(db),
+      this.verifyDataIntegrity(db),
+      this.verifyConstraints(db),
+      this.verifyIndexes(db)
+    ];
+
+    return Promise.all(checks);
+  }
+}
+```
+
+### Implementation Steps
+1. Set up automated backup system
+2. Implement verification process
+3. Add integrity checks
+4. Configure backup monitoring
+5. Create recovery procedures
+
+Would you like me to:
+1. Continue with the remaining P0 items?
+2. Add more detail to any specific component?
+3. Include testing strategies for these features?
+4. Add monitoring and alerting details?        resetLink: `${process.env.APP_URL}/reset-password/${token}`,
+        userName: user.profile.fullName || user.email,
+        expiresIn: '1 hour'
+      }
+    });
+  }
+
+  async verifyResetToken(token: string): Promise<boolean> {
+    const resetToken = await PasswordResetToken.findOne({
+      where: {
+        token,
+        used: false,
+        expiresAt: {
+          [Op.gt]: new Date()
+        }
+      }
+    });
+
+    return !!resetToken;
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const resetToken = await PasswordResetToken.findOne({
+        where: {
+          token,
+          used: false,
+          expiresAt: {
+            [Op.gt]: new Date()
+          }
+        },
+        lock: true,
+        transaction
+      });
+
+      if (!resetToken) {
+        throw new AppError(
+          ErrorCodes.INVALID_TOKEN,
+          'Invalid or expired reset token',
+          400
+        );
+      }
+
+      // Validate new password
+      await this.passwordService.validatePassword(newPassword);
+
+      // Check password history
+      await this.checkPasswordHistory(resetToken.userId, newPassword, transaction);
+
+      // Update user password
+      const hashedPassword = await bcrypt.hash(newPassword, 12);
+      await User.update(
+        { hashedPassword },
+        {
+          where: { id: resetToken.userId },
+          transaction
+        }
+      );
+
+      // Store password in history
+      await PasswordHistory.create({
+        userId: resetToken.userId,
+        hashedPassword
+      }, { transaction });
+
+      // Mark token as used
+      await resetToken.update(
+        { used: true },
+        { transaction }
+      );
+
+      // Revoke all existing sessions and tokens
+      await Promise.all([
+        this.sessionService.revokeAllUserSessions(resetToken.userId),
+        this.tokenService.revokeAllUserTokens(resetToken.userId)
+      ]);
+
+      // Send notification email
+      const user = await User.findByPk(resetToken.userId);
+      await this.emailService.queueEmail({
+        template: 'auth/password_changed',
+        to: user!.email,
+        templateData: {
+          userName: user!.profile.fullName || user!.email
+        }
+      });
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  private async checkPasswordHistory(
+    userId: string,
+    newPassword: string,
+    transaction: Transaction
+  ): Promise<void> {
+    const recentPasswords = await PasswordHistory.findAll({
+      where: { userId },
+      order: [['createdAt', 'DESC']],
+      limit: 5,
+      transaction
+    });
+
+    for (const historicPassword of recentPasswords) {
+      const matches = await bcrypt.compare(
+        newPassword,
+        historicPassword.hashedPassword
+      );
+      if (matches) {
+        throw new AppError(
+          ErrorCodes.INVALID_PASSWORD,
+          'Password has been used recently',
+          400
+        );
+      }
+    }
+  }
+}
+
+## 17. Enhanced Security Features
+
+### Data Encryption at Rest
+```typescript
+// services/field-encryption.service.ts
+export class FieldEncryptionService {
+  private readonly encryptionKey: Buffer;
+  private readonly algorithm = 'aes-256-gcm';
+
+  constructor() {
+    this.encryptionKey = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex');
+  }
+
+  encrypt(text: string): {
+    encryptedData: string;
+    iv: string;
+    tag: string;
+  } {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv(
+      this.algorithm,
+      this.encryptionKey,
+      iv
+    );
+
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const tag = cipher.getAuthTag();
+
+    return {
+      encryptedData: encrypted,
+      iv: iv.toString('hex'),
+      tag: tag.toString('hex')
+    };
+  }
+
+  decrypt(
+    encryptedData: string,
+    iv: string,
+    tag: string
+  ): string {
+    const decipher = crypto.createDecipheriv(
+      this.algorithm,
+      this.encryptionKey,
+      Buffer.from(iv, 'hex')
+    );
+
+    decipher.setAuthTag(Buffer.from(tag, 'hex'));
+
+    let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+}
+
+// Sequelize model decorator for field encryption
+function encryptedField(target: any, propertyKey: string) {
+  const encryptionService = new FieldEncryptionService();
+
+  // Define getters and setters
+  Object.defineProperty(target, propertyKey, {
+    get() {
+      const encrypted = this.getDataValue(`${propertyKey}_encrypted`);
+      if (!encrypted) return null;
+
+      const { encryptedData, iv, tag } = JSON.parse(encrypted);
+      return encryptionService.decrypt(encryptedData, iv, tag);
+    },
+    set(value: string) {
+      if (value === null) {
+        this.setDataValue(`${propertyKey}_encrypted`, null);
+        return;
+      }
+
+      const encrypted = encryptionService.encrypt(value);
+      this.setDataValue(
+        `${propertyKey}_encrypted`,
+        JSON.stringify(encrypted)
+      );
+    }
+  });
+}
+
+### Enhanced Rate Limiting
+```typescript
+// middleware/rate-limit.ts
+interface RateLimitOptions {
+  points: number;
+  duration: number;
+  blockDuration?: number;
+  keyPrefix?: string;
+  skipFailedRequests?: boolean;
+  handler?: (req: Request, res: Response) => void;
+}
+
+export class RateLimiterService {
+  private readonly redis: RedisService;
+  private limiters: Map<string, RateLimiterRedis>;
+
+  constructor() {
+    this.redis = new RedisService();
+    this.limiters = new Map();
+  }
+
+  createLimiter(options: RateLimitOptions): RequestHandler {
+    const limiterKey = `${options.keyPrefix}:${options.points}:${options.duration}`;
+    
+    if (!this.limiters.has(limiterKey)) {
+      this.limiters.set(
+        limiterKey,
+        new RateLimiterRedis({
+          storeClient: this.redis.client,
+          keyPrefix: options.keyPrefix,
+          points: options.points,
+          duration: options.duration,
+          blockDuration: options.blockDuration
+        })
+      );
+    }
+
+    const limiter = this.limiters.get(limiterKey)!;
+
+    return async (req: Request, res: Response, next: NextFunction) => {
+      const key = this.generateKey(req, options.keyPrefix);
+
+      try {
+        const rateLimitResult = await limiter.consume(key);
+        
+        this.setRateLimitHeaders(res, rateLimitResult);
+        
+        next();
+      } catch (error) {
+        if (error instanceof Error) {
+          next(error);
+          return;
+        }
+
+        const retryAfter = Math.round(error.msBeforeNext / 1000) || 1;
+        
+        res.set('Retry-After', String(retryAfter));
+        res.status(429).json({
+          error: 'Too Many Requests',
+          retryAfter
+        });
+      }
+    };
+  }
+
+  private generateKey(req: Request, prefix?: string): string {
+    const parts = [
+      req.ip,
+      req.tenant?.id || 'global'
+    ];
+
+    if (prefix) {
+      parts.unshift(prefix);
+    }
+
+    return parts.join(':');
+  }
+
+  private setRateLimitHeaders(
+    res: Response,
+    rateLimitResult: RateLimiterRes
+  ): void {
+    res.set({
+      'X-RateLimit-Limit': String(rateLimitResult.limit),
+      'X-RateLimit-Remaining': String(rateLimitResult.remainingPoints),
+      'X-RateLimit-Reset': String(rateLimitResult.msBeforeNext)
+    });
+  }
+}
+
+### Security Headers Configuration
+```typescript
+// middleware/security-headers.ts
+export const securityHeaders: RequestHandler = (req, res, next) => {
+  // HSTS
+  res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+
+  // Prevent clickjacking
+  res.set('X-Frame-Options', 'SAMEORIGIN');
+
+  // XSS protection
+  res.set('X-XSS-Protection', '1; mode=block');
+
+  // Prevent MIME type sniffing
+  res.set('X-Content-Type-Options', 'nosniff');
+
+  // Referrer policy
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Content Security Policy
+  res.set('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "media-src 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
+
+  // Permissions Policy
+  res.set('Permissions-Policy', [
+    'camera=()',
+    'microphone=()',
+    'geolocation=()',
+    'payment=()',
+    'usb=()',
+    'magnetometer=()',
+    'accelerometer=()',
+    'gyroscope=()'
+  ].join(', '));
+
+  next();
+};
+
+### File Upload Security
+```typescript
+// services/file-upload.service.ts
+export class FileUploadService {
+  private readonly allowedMimeTypes = new Map([
+    ['image/jpeg', { maxSize: 5 * 1024 * 1024, ext: 'jpg' }],
+    ['image/png', { maxSize: 5 * 1024 * 1024, ext: 'png' }],
+    ['application/pdf', { maxSize: 10 * 1024 * 1024, ext: 'pdf' }],
+    ['application/msword', { maxSize: 10 * 1024 * 1024, ext: 'doc' }],
+    ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+     { maxSize: 10 * 1024 * 1024, ext: 'docx' }]
+  ]);
+
+  private readonly storage: StorageService;
+  private readonly virusScanner: VirusScanService;
+
+  constructor() {
+    this.storage = new StorageService();
+    this.virusScanner = new VirusScanService();
+  }
+
+  async uploadFile(
+    file: Express.Multer.File,
+    options: {
+      tenantId: string;
+      userId: string;
+      category: string;
+    }
+  ): Promise<UploadedFile> {
+    // Validate file type
+    const fileType = await FileType.fromBuffer(file.buffer);
+    if (!fileType || !this.allowedMimeTypes.has(fileType.mime)) {
+      throw new AppError(
+        ErrorCodes.INVALID_FILE_TYPE,
+        'Invalid file type',
+        400
+      );
+    }
+
+    // Validate file size
+    const maxSize = this.allowedMimeTypes.get(fileType.mime)!.maxSize;
+    if (file.size > maxSize) {
+      throw new AppError(
+        ErrorCodes.FILE_TOO_LARGE,
+        'File too large',
+        400
+      );
+    }
+
+    // Scan for viruses
+    const scanResult = await this.virusScanner.scanBuffer(file.buffer);
+    if (!scanResult.isClean) {
+      throw new AppError(
+        ErrorCodes.MALICIOUS_FILE,
+        'File appears to be malicious',
+        400
+      );
+    }
+
+    // Generate unique filename
+    const filename = this.generateUniqueFilename(
+      file.originalname,
+      this.allowedMimeTypes.get(fileType.mime)!.ext
+    );
+
+    // Upload to storage
+    const path = await this.storage.uploadFile(
+      file.buffer,
+      filename,
+      fileType.mime,
+      options
+    );
+
+    // Create file record
+    const uploadedFile = await UploadedFile.create({
+      tenantId: options.tenantId,
+      userId: options.userId,
+      filename: file.originalname,
+      storagePath: path,
+      mimeType: fileType.mime,
+      size: file.size,
+      category: options.category,
+      metadata: {
+        originalName: file.originalname,
+        scanResult: scanResult.summary
+      }
+    });
+
+    return uploadedFile;
+  }
+
+  private generateUniqueFilename(
+    originalName: string,
+    extension: string
+  ): string {
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(8).toString('hex');
+    const sanitizedName = originalName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .substring(0, 32);
+
+    return `${timestamp}-${random}-${sanitizedName}.${extension}`;
+  }
+}
+```
+
+This implementation provides:
+
+1. Complete password reset workflow with security features
+2. Comprehensive data encryption at rest
+3. Enhanced rate limiting with Redis
+4. Robust security headers
+5. Secure file upload handling with virus scanning
+
+Would you like me to:
+1. Add more security features?
+2. Implement additional file handling capabilities?
+3. Add more sophisticated rate limiting rules?
+4. Implement additional encryption features?```typescript
+// services/feature-flag.service.ts continued...
+export class FeatureFlagService {
+  private cache: CacheService;
+
+  constructor() {
+    this.cache = new CacheService();
+  }
+
+  async getFeatureValue(
+    featureName: string,
+    context: {
+      tenantId: string;
+      userId?: string;
+      attributes?: Record<string, any>;
+    }
+  ): Promise<any> {
+    const cacheKey = `feature:${context.tenantId}:${featureName}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) return cached;
+
+    const feature = await FeatureFlag.findOne({
+      where: { name: featureName },
+      include: [{
+        model: TenantFeatureFlag,
+        where: { tenantId: context.tenantId },
+        required: false
+      }]
+    });
+
+    if (!feature) {
+      throw new Error(`Feature ${featureName} not found`);
+    }
+
+    let value = feature.defaultValue;
+
+    // Check tenant override
+    if (feature.TenantFeatureFlag) {
+      value = feature.TenantFeatureFlag.value;
+
+      // Apply tenant-specific rules
+      if (feature.TenantFeatureFlag.overrideRules) {
+        value = await this.evaluateRules(
+          feature.TenantFeatureFlag.overrideRules,
+          context
+        );
+      }
+    } else {
+      // Apply global rules
+      if (feature.rules) {
+        value = await this.evaluateRules(feature.rules, context);
+      }
+    }
+
+    await this.cache.set(cacheKey, value, 300); // Cache for 5 minutes
+    return value;
+  }
+
+  private async evaluateRules(
+    rules: any[],
+    context: {
+      tenantId: string;
+      userId?: string;
+      attributes?: Record<string, any>;
+    }
+  ): Promise<any> {
+    for (const rule of rules) {
+      if (await this.matchesRule(rule, context)) {
+        return rule.value;
+      }
+    }
+    return null;
+  }
+
+  private async matchesRule(rule: any, context: any): Promise<boolean> {
+    // Implement rule matching logic
+    // Example: percentage rollouts, user attributes, dates, etc.
+    return true;
+  }
+}
+
+## 14. User Notification System
+
+### Notification Models
+```typescript
+// models/notification.ts
+export class Notification extends Model {
+  public id!: string;
+  public userId!: string;
+  public tenantId!: string;
+  public type!: string;
+  public title!: string;
+  public message!: string;
+  public data?: object;
+  public status!: 'unread' | 'read' | 'archived';
+  public priority!: 'low' | 'medium' | 'high';
+  public readAt?: Date;
+  public expiresAt?: Date;
+}
+
+// models/notification-preference.ts
+export class NotificationPreference extends Model {
+  public userId!: string;
+  public tenantId!: string;
+  public channelType!: 'email' | 'in_app' | 'push' | 'sms';
+  public notificationType!: string;
+  public enabled!: boolean;
+}
+
+### Notification Service
+```typescript
+// services/notification.service.ts
+export class NotificationService {
+  private readonly emailService: EmailService;
+  private readonly pushService: PushNotificationService;
+  private readonly smsService: SMSService;
+
+  constructor() {
+    this.emailService = new EmailService();
+    this.pushService = new PushNotificationService();
+    this.smsService = new SMSService();
+  }
+
+  async createNotification(params: {
+    userId: string;
+    tenantId: string;
+    type: string;
+    title: string;
+    message: string;
+    data?: object;
+    priority?: 'low' | 'medium' | 'high';
+    expiresAt?: Date;
+  }): Promise<Notification> {
+    const notification = await Notification.create({
+      ...params,
+      status: 'unread'
+    });
+
+    // Get user preferences
+    const preferences = await NotificationPreference.findAll({
+      where: {
+        userId: params.userId,
+        tenantId: params.tenantId,
+        notificationType: params.type
+      }
+    });
+
+    // Send notifications through enabled channels
+    await Promise.all(
+      preferences
+        .filter(pref => pref.enabled)
+        .map(pref => this.sendThroughChannel(notification, pref.channelType))
+    );
+
+    return notification;
+  }
+
+  private async sendThroughChannel(
+    notification: Notification,
+    channel: string
+  ): Promise<void> {
+    switch (channel) {
+      case 'email':
+        await this.emailService.queueEmail({
+          template: 'notifications/general',
+          to: notification.user.email,
+          subject: notification.title,
+          templateData: {
+            title: notification.title,
+            message: notification.message,
+            data: notification.data
+          }
+        });
+        break;
+
+      case 'push':
+        await this.pushService.sendNotification({
+          userId: notification.userId,
+          title: notification.title,
+          body: notification.message,
+          data: notification.data
+        });
+        break;
+
+      case 'sms':
+        await this.smsService.sendMessage({
+          to: notification.user.phoneNumber,
+          message: `${notification.title}: ${notification.message}`
+        });
+        break;
+    }
+  }
+
+  async markAsRead(notificationId: string, userId: string): Promise<void> {
+    await Notification.update(
+      {
+        status: 'read',
+        readAt: new Date()
+      },
+      {
+        where: {
+          id: notificationId,
+          userId
+        }
+      }
+    );
+  }
+
+  async getUserNotifications(params: {
+    userId: string;
+    tenantId: string;
+    status?: 'unread' | 'read' | 'archived';
+    limit?: number;
+    offset?: number;
+  }): Promise<{ notifications: Notification[]; total: number }> {
+    const { count, rows } = await Notification.findAndCountAll({
+      where: {
+        userId: params.userId,
+        tenantId: params.tenantId,
+        status: params.status,
+        expiresAt: {
+          [Op.or]: [
+            { [Op.gt]: new Date() },
+            { [Op.is]: null }
+          ]
+        }
+      },
+      limit: params.limit,
+      offset: params.offset,
+      order: [['createdAt', 'DESC']]
+    });
+
+    return {
+      notifications: rows,
+      total: count
+    };
+  }
+}
+
+## 15. Tenant Onboarding Workflow
+
+### Tenant Onboarding Service
+```typescript
+// services/tenant-onboarding.service.ts
+export class TenantOnboardingService {
+  private readonly steps = [
+    'initialize_tenant',
+    'create_database',
+    'run_migrations',
+    'create_admin_user',
+    'setup_default_roles',
+    'setup_default_settings',
+    'initialize_features',
+    'send_welcome_email'
+  ];
+
+  async startOnboarding(params: CreateTenantDTO): Promise<void> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Create tenant record
+      const tenant = await this.initializeTenant(params, transaction);
+
+      // Create and setup database
+      await this.setupTenantDatabase(tenant, transaction);
+
+      // Create admin user
+      const admin = await this.createAdminUser(tenant, params.adminEmail, transaction);
+
+      // Setup default configuration
+      await Promise.all([
+        this.setupDefaultRoles(tenant, transaction),
+        this.setupDefaultSettings(tenant, transaction),
+        this.initializeFeatures(tenant, transaction)
+      ]);
+
+      // Send welcome email
+      await this.sendWelcomeEmail(tenant, admin);
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  private async initializeTenant(
+    params: CreateTenantDTO,
+    transaction: Transaction
+  ): Promise<Tenant> {
+    return await Tenant.create({
+      name: params.name,
+      slug: params.slug || this.generateSlug(params.name),
+      status: 'initializing',
+      settings: DEFAULT_TENANT_SETTINGS,
+      securityPolicies: DEFAULT_SECURITY_POLICIES
+    }, { transaction });
+  }
+
+  private async setupTenantDatabase(
+    tenant: Tenant,
+    transaction: Transaction
+  ): Promise<void> {
+    // Create database
+    await this.databaseService.createDatabase(tenant.databaseName);
+
+    // Run migrations
+    await this.migrationService.runMigrations(tenant.databaseName);
+
+    // Update tenant status
+    await tenant.update({
+      status: 'active',
+      setupCompletedAt: new Date()
+    }, { transaction });
+  }
+
+  private async createAdminUser(
+    tenant: Tenant,
+    email: string,
+    transaction: Transaction
+  ): Promise<User> {
+    const password = crypto.randomBytes(12).toString('hex');
+
+    const admin = await User.create({
+      email,
+      hashedPassword: await bcrypt.hash(password, 12),
+      status: 'active',
+      roles: ['tenant_admin']
+    }, { transaction });
+
+    await UserTenant.create({
+      userId: admin.id,
+      tenantId: tenant.id,
+      roles: ['tenant_admin']
+    }, { transaction });
+
+    await this.emailService.queueEmail({
+      template: 'tenant/welcome_admin',
+      to: email,
+      templateData: {
+        tenantName: tenant.name,
+        password,
+        loginUrl: `${process.env.APP_URL}/login`
+      }
+    });
+
+    return admin;
+  }
+
+  private async setupDefaultRoles(
+    tenant: Tenant,
+    transaction: Transaction
+  ): Promise<void> {
+    for (const roleConfig of DEFAULT_ROLES) {
+      await Role.create({
+        ...roleConfig,
+        tenantId: tenant.id
+      }, { transaction });
+    }
+  }
+
+  private async setupDefaultSettings(
+    tenant: Tenant,
+    transaction: Transaction
+  ): Promise<void> {
+    await TenantSettings.create({
+      tenantId: tenant.id,
+      settings: DEFAULT_SETTINGS,
+      securityPolicies: DEFAULT_SECURITY_POLICIES,
+      features: DEFAULT_FEATURES
+    }, { transaction });
+  }
+
+  private async initializeFeatures(
+    tenant: Tenant,
+    transaction: Transaction
+  ): Promise<void> {
+    const features = await FeatureFlag.findAll();
+
+    await Promise.all(
+      features.map(feature =>
+        TenantFeatureFlag.create({
+          tenantId: tenant.id,
+          featureId: feature.id,
+          value: feature.defaultValue
+        }, { transaction })
+      )
+    );
+  }
+
+  private generateSlug(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+}
+
+## 16. Session Management and Token Handling
+
+### Session Management
+```typescript
+// services/session.service.ts
+export class SessionService {
+  private readonly redis: RedisService;
+
+  constructor() {
+    this.redis = new RedisService();
+  }
+
+  async createSession(params: {
+    userId: string;
+    tenantId: string;
+    deviceInfo: DeviceInfo;
+  }): Promise<Session> {
+    const sessionId = uuidv4();
+    const session = {
+      id: sessionId,
+      userId: params.userId,
+      tenantId: params.tenantId,
+      deviceInfo: params.deviceInfo,
+      createdAt: new Date(),
+      lastAccessedAt: new Date()
+    };
+
+    // Store session in Redis
+    await this.redis.set(
+      `session:${sessionId}`,
+      JSON.stringify(session),
+      'EX',
+      86400 // 24 hours
+    );
+
+    // Store session in database for tracking
+    await Session.create(session);
+
+    return session;
+  }
+
+  async validateSession(sessionId: string): Promise<Session | null> {
+    // Check Redis first
+    const sessionData = await this.redis.get(`session:${sessionId}`);
+    if (!sessionData) {
+      return null;
+    }
+
+    const session = JSON.parse(sessionData);
+
+    // Update last accessed time
+    await Promise.all([
+      this.redis.set(
+        `session:${sessionId}`,
+        JSON.stringify({
+          ...session,
+          lastAccessedAt: new Date()
+        }),
+        'EX',
+        86400
+      ),
+      Session.update(
+        { lastAccessedAt: new Date() },
+        { where: { id: sessionId } }
+      )
+    ]);
+
+    return session;
+  }
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await Promise.all([
+      this.redis.del(`session:${sessionId}`),
+      Session.update(
+        { revokedAt: new Date() },
+        { where: { id: sessionId } }
+      )
+    ]);
+  }
+
+  async revokeAllUserSessions(userId: string): Promise<void> {
+    const sessions = await Session.findAll({
+      where: {
+        userId,
+        revokedAt: null
+      }
+    });
+
+    await Promise.all(
+      sessions.map(session =>
+        this.revokeSession(session.id)
+      )
+    );
+  }
+}
+
+### Token Revocation Service
+```typescript
+// services/token-revocation.service.ts
+export class TokenRevocationService {
+  private readonly redis: RedisService;
+
+  constructor() {
+    this.redis = new RedisService();
+  }
+
+  async revokeToken(token: string, reason: string): Promise<void> {
+    await this.redis.set(
+      `revoked_token:${token}`,
+      reason,
+      'EX',
+      86400 * 7 // 7 days
+    );
+  }
+
+  async isTokenRevoked(token: string): Promise<boolean> {
+    return await this.redis.exists(`revoked_token:${token}`);
+  }
+
+  async revokeAllUserTokens(userId: string): Promise<void> {
+    const tokens = await OAuthToken.findAll({
+      where: { userId }
+    });
+
+    await Promise.all(
+      tokens.map(token =>
+        this.revokeToken(token.accessToken, 'user_security_event')
+      )
+    );
+  }
+}
+
+### Password Reset Implementation
+```typescript
+// services/password-reset.service.ts
+export class PasswordResetService {
+  private readonly tokenExpiration = 3600; // 1 hour
+
+  async initiateReset(email: string): Promise<void> {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      // Don't reveal user existence
+      return;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    
+    // Store reset token
+    await PasswordResetToken.create({
+      userId: user.id,
+      token,
+      expiresAt: new Date(Date.now() + this.tokenExpiration * 1000)
+    });
+
+    // Send reset email
+    await this.emailService.queueEmail({
+      template: 'auth/password_reset',
+      to: email,
+      templateData: {
+        resetLink: `${process.env.## 11. User Experience & API Standardization
+
+### Standard Response Format
+```typescript
+// types/api.types.ts
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+  meta?: {
+    pagination?: PaginationMeta;
+    sorting?: SortingMeta;
+    filtering?: FilterMeta;
+  };
+}
+
+interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+interface SortingMeta {
+  field: string;
+  order: 'asc' | 'desc';
+}
+
+interface FilterMeta {
+  filters: Array<{
+    field: string;
+    operator: string;
+    value: any;
+  }>;
+}
+
+// middleware/response-handler.ts
+export const responseHandler = (req: Request, res: Response, next: NextFunction) => {
+  const originalJson = res.json;
+  res.json = function (body: any): Response {
+    const response: ApiResponse<any> = {
+      success: true,
+      data: body
+    };
+
+    if (body?.pagination) {
+      response.meta = {
+        pagination: body.pagination
+      };
+      delete body.pagination;
+    }
+
+    return originalJson.call(this, response);
+  };
+  next();
+};
+
+### Standardized Error Handling
+```typescript
+// types/error.types.ts
+export class AppError extends Error {
+  constructor(
+    public code: string,
+    public message: string,
+    public statusCode: number = 400,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+export const ErrorCodes = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR'
+} as const;
+
+// middleware/error-handler.ts
+export const errorHandler = (
+  error: any,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const response: ApiResponse<null> = {
+    success: false,
+    error: {
+      code: error.code || ErrorCodes.INTERNAL_ERROR,
+      message: error.message || 'An unexpected error occurred',
+      details: error.details
+    }
+  };
+
+  // Log error
+  logger.error('API Error:', {
+    error: response.error,
+    stack: error.stack,
+    path: req.path,
+    method: req.method,
+    tenant: req.tenant?.id,
+    user: req.user?.id
+  });
+
+  res.status(error.statusCode || 500).json(response);
+};
+
+### Pagination, Sorting, and Filtering
+```typescript
+// middleware/query-parser.ts
+export interface QueryOptions {
+  pagination?: {
+    defaultLimit?: number;
+    maxLimit?: number;
+  };
+  sorting?: {
+    defaultField?: string;
+    defaultOrder?: 'asc' | 'desc';
+    allowedFields?: string[];
+  };
+  filtering?: {
+    allowedFields?: string[];
+    allowedOperators?: string[];
+  };
+}
+
+export const queryParser = (options: QueryOptions = {}) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Parse pagination
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(
+      parseInt(req.query.limit as string) || options.pagination?.defaultLimit || 10,
+      options.pagination?.maxLimit || 100
+    );
+    const offset = (page - 1) * limit;
+
+    // Parse sorting
+    const sort = (req.query.sort as string) || options.sorting?.defaultField;
+    const order = (req.query.order as string)?.toLowerCase() || options.sorting?.defaultOrder || 'asc';
+
+    // Parse filtering
+    const filters = parseFilters(req.query, options.filtering);
+
+    // Parse search
+    const search = req.query.search as string;
+
+    req.queryOptions = {
+      pagination: { page, limit, offset },
+      sorting: { field: sort, order },
+      filtering: filters,
+      search
+    };
+
+    next();
+  };
+};
+
+// services/base.service.ts
+export class BaseService {
+  protected async buildQuery(
+    queryOptions: QueryOptions,
+    baseQuery: any = {}
+  ): Promise<any> {
+    const { pagination, sorting, filtering, search } = queryOptions;
+
+    // Apply filtering
+    if (filtering?.filters?.length) {
+      baseQuery.where = {
+        [Op.and]: filtering.filters.map(filter => ({
+          [filter.field]: {
+            [this.mapOperator(filter.operator)]: filter.value
+          }
+        }))
+      };
+    }
+
+    // Apply search if provided
+    if (search) {
+      baseQuery.where = {
+        ...baseQuery.where,
+        [Op.or]: this.searchableFields.map(field => ({
+          [field]: { [Op.iLike]: `%${search}%` }
+        }))
+      };
+    }
+
+    // Apply sorting
+    if (sorting?.field) {
+      baseQuery.order = [[sorting.field, sorting.order.toUpperCase()]];
+    }
+
+    // Apply pagination
+    baseQuery.limit = pagination.limit;
+    baseQuery.offset = pagination.offset;
+
+    return baseQuery;
+  }
+}
+
+## 12. Security Implementation
+
+### Input Sanitization & Validation
+```typescript
+// middleware/sanitizer.ts
+import { sanitize } from 'class-sanitizer';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+
+export const sanitizeInput = (dto: any) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const dtoObject = plainToClass(dto, req.body);
+      sanitize(dtoObject);
+      const errors = await validate(dtoObject);
+
+      if (errors.length > 0) {
+        throw new AppError(
+          ErrorCodes.VALIDATION_ERROR,
+          'Validation failed',
+          400,
+          errors
+        );
+      }
+
+      req.body = dtoObject;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+### SQL Injection Prevention & Database Security
+```typescript
+// config/sequelize.config.ts
+export const sequelizeConfig: Options = {
+  dialect: 'postgres',
+  dialectOptions: {
+    ssl: true
+  },
+  define: {
+    timestamps: true,
+    paranoid: true
+  },
+  pool: {
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  },
+  logging: (sql: string, timing?: number) => {
+    logger.debug('Executed query', { sql, timing });
+  }
+};
+
+// services/base.service.ts
+export class BaseService {
+  protected async executeQuery<T>(
+    queryFn: (transaction: Transaction) => Promise<T>,
+    options: { transaction?: Transaction; retryCount?: number } = {}
+  ): Promise<T> {
+    const transaction = options.transaction || await sequelize.transaction();
+    
+    try {
+      const result = await queryFn(transaction);
+      
+      if (!options.transaction) {
+        await transaction.commit();
+      }
+      
+      return result;
+    } catch (error) {
+      if (!options.transaction) {
+        await transaction.rollback();
+      }
+      throw error;
+    }
+  }
+}
+
+### XSS Protection & Security Headers
+```typescript
+// middleware/security.ts
+import helmet from 'helmet';
+import xss from 'xss-clean';
+
+export const securityMiddleware = [
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"]
+      }
+    },
+    xssFilter: true,
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
+  }),
+  xss()
+];
+
+### CORS Configuration
+```typescript
+// config/cors.config.ts
+import cors from 'cors';
+
+export const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-tenant',
+    'x-client-version'
+  ],
+  exposedHeaders: ['Content-Range', 'X-RateLimit-Limit'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
+};
+
+### File Upload Security
+```typescript
+// middleware/file-upload.ts
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { AppError, ErrorCodes } from '../types/error.types';
+
+const ALLOWED_FILE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+]);
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+export const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, path.join(process.cwd(), 'uploads'));
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = uuidv4();
+      cb(null, `${uniqueSuffix}-${file.originalname}`);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_FILE_TYPES.has(file.mimetype)) {
+      cb(new AppError(
+        ErrorCodes.VALIDATION_ERROR,
+        'Invalid file type',
+        400
+      ));
+      return;
+    }
+    cb(null, true);
+  },
+  limits: {
+    fileSize: MAX_FILE_SIZE
+  }
+});
+
+### Password Policy Implementation
+```typescript
+// services/password.service.ts
+export class PasswordService {
+  private readonly MINIMUM_LENGTH = 8;
+  private readonly MAXIMUM_LENGTH = 128;
+  private readonly REQUIRED_PATTERNS = [
+    /[A-Z]/, // uppercase
+    /[a-z]/, // lowercase
+    /[0-9]/, // numbers
+    /[!@#$%^&*]/ // special characters
+  ];
+  private readonly PROHIBITED_PATTERNS = [
+    /password/i,
+    /12345/,
+    /qwerty/i
+  ];
+
+  async validatePassword(password: string): Promise<boolean> {
+    if (
+      password.length < this.MINIMUM_LENGTH ||
+      password.length > this.MAXIMUM_LENGTH
+    ) {
+      throw new AppError(
+        ErrorCodes.VALIDATION_ERROR,
+        `Password must be between ${this.MINIMUM_LENGTH} and ${this.MAXIMUM_LENGTH} characters`,
+        400
+      );
+    }
+
+    const missingPatterns = this.REQUIRED_PATTERNS.filter(
+      pattern => !pattern.test(password)
+    );
+
+    if (missingPatterns.length > 0) {
+      throw new AppError(
+        ErrorCodes.VALIDATION_ERROR,
+        'Password must contain uppercase, lowercase, numbers, and special characters',
+        400
+      );
+    }
+
+    const hasProhibitedPattern = this.PROHIBITED_PATTERNS.some(
+      pattern => pattern.test(password)
+    );
+
+    if (hasProhibitedPattern) {
+      throw new AppError(
+        ErrorCodes.VALIDATION_ERROR,
+        'Password contains prohibited patterns',
+        400
+      );
+    }
+
+    return true;
+  }
+
+  async hashPassword(password: string): Promise<string> {
+    return await bcrypt.hash(password, 12);
+  }
+
+  async verifyPassword(password: string, hash: string): Promise<boolean> {
+    return await bcrypt.compare(password, hash);
+  }
+}
+
+### Data Encryption
+```typescript
+// services/encryption.service.ts
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+
+export class EncryptionService {
+  private readonly algorithm = 'aes-256-gcm';
+  private readonly key: Buffer;
+
+  constructor() {
+    this.key = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex');
+  }
+
+  async encrypt(data: string): Promise<{
+    encryptedData: string;
+    iv: string;
+    authTag: string;
+  }> {
+    const iv = randomBytes(16);
+    const cipher = createCipheriv(this.algorithm, this.key, iv);
+
+    let encryptedData = cipher.update(data, 'utf8', 'hex');
+    encryptedData += cipher.final('hex');
+    const authTag = cipher.getAuthTag();
+
+    return {
+      encryptedData,
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex')
+    };
+  }
+
+  async decrypt(
+    encryptedData: string,
+    iv: string,
+    authTag: string
+  ): Promise<string> {
+    const decipher = createDecipheriv(
+      this.algorithm,
+      this.key,
+      Buffer.from(iv, 'hex')
+    );
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+
+    let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+}
+
+## 13. Feature Flag Management
+
+### Feature Flag Models and Types
+```typescript
+// models/feature-flag.ts
+export class FeatureFlag extends Model {
+  public id!: string;
+  public name!: string;
+  public description?: string;
+  public type!: 'boolean' | 'string' | 'number' | 'json';
+  public defaultValue!: any;
+  public rules?: object[];
+}
+
+export class TenantFeatureFlag extends Model {
+  public tenantId!: string;
+  public featureId!: string;
+  public value!: any;
+  public overrideRules?: object[];
+}
+
+### Feature Flag Service
+```typescript
+// services/feature-flag.service.ts
+export class FeatureFlagService {
+  private cache: CacheService;### Additional API Endpoints
+
+```typescript
+// routes/user.routes.ts - Additional Endpoints
+router.get('/users/:id/audit-logs',
+  checkPermission('users:view_audit'),
+  userController.getUserAuditLogs
+);
+
+router.get('/users/:id/sessions',
+  checkPermission('users:manage_sessions'),
+  userController.getUserSessions
+);
+
+router.post('/users/:id/sessions/revoke',
+  checkPermission('users:manage_sessions'),
+  userController.revokeUserSessions
+);
+
+router.get('/users/:id/permissions',
+  checkPermission('users:view_permissions'),
+  userController.getUserPermissions
+);
+
+router.post('/users/invite',
+  checkPermission('users:invite'),
+  userController.inviteUser
+);
+
+router.post('/users/:id/mfa/enable',
+  checkPermission('users:manage_mfa'),
+  userController.enableMFA
+);
+
+router.post('/users/:id/mfa/disable',
+  checkPermission('users:manage_mfa'),
+  userController.disableMFA
+);
+
+// routes/tenant.routes.ts - Additional Endpoints
+router.get('/tenants/:id/usage',
+  checkPermission('tenants:view_usage'),
+  tenantController.getTenantUsage
+);
+
+router.get('/tenants/:id/audit-logs',
+  checkPermission('tenants:view_audit'),
+  tenantController.getTenantAuditLogs
+);
+
+router.get('/tenants/:id/users',
+  checkPermission('tenants:list_users'),
+  tenantController.getTenantUsers
+);
+
+router.post('/tenants/:id/backup',
+  checkPermission('tenants:manage_backup'),
+  tenantController.createTenantBackup
+);
+
+router.post('/tenants/:id/restore',
+  checkPermission('tenants:manage_backup'),
+  tenantController.restoreTenantBackup
+);
+
+router.get('/tenants/:id/settings',
+  checkPermission('tenants:view_settings'),
+  tenantController.getTenantSettings
+);
+
+// routes/group.routes.ts - Additional Endpoints
+router.get('/groups',
+  checkPermission('groups:list'),
+  groupController.listGroups
+);
+
+router.post('/groups',
+  checkPermission('groups:create'),
+  groupController.createGroup
+);
+
+router.get('/groups/:id/members',
+  checkPermission('groups:view_members'),
+  groupController.getGroupMembers
+);
+
+router.post('/groups/:id/members',
+  checkPermission('groups:manage_members'),
+  groupController.addGroupMembers
+);
+
+router.delete('/groups/:id/members/:userId',
+  checkPermission('groups:manage_members'),
+  groupController.removeGroupMember
+);
+
+### Caching Implementation
+
+```typescript
+// services/cache.service.ts
+import Redis from 'ioredis';
+import { Logger } from '../utils/logger';
+
+export class CacheService {
+  private redis: Redis;
+  private logger: Logger;
+
+  constructor() {
+    this.redis = new Redis({
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      }
+    });
+
+    this.logger = new Logger('CacheService');
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    try {
+      const data = await this.redis.get(key);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      this.logger.error('Cache get error:', error);
+      return null;
+    }
+  }
+
+  async set(key: string, value: any, ttl?: number): Promise<void> {
+    try {
+      const serialized = JSON.stringify(value);
+      if (ttl) {
+        await this.redis.setex(key, ttl, serialized);
+      } else {
+        await this.redis.set(key, serialized);
+      }
+    } catch (error) {
+      this.logger.error('Cache set error:', error);
+    }
+  }
+
+  async del(key: string): Promise<void> {
+    try {
+      await this.redis.del(key);
+    } catch (error) {
+      this.logger.error('Cache delete error:', error);
+    }
+  }
+
+  async invalidatePattern(pattern: string): Promise<void> {
+    try {
+      const keys = await this.redis.keys(pattern);
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } catch (error) {
+      this.logger.error('Cache pattern invalidation error:', error);
+    }
+  }
+}
+
+// middleware/cache.middleware.ts
+import { CacheService } from '../services/cache.service';
+
+interface CacheOptions {
+  ttl?: number;
+  keyPrefix?: string;
+  varyByQuery?: string[];
+  varyByUser?: boolean;
+  varyByTenant?: boolean;
+}
+
+export const cacheMiddleware = (options: CacheOptions = {}) => {
+  const cache = new CacheService();
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET') {
+      return next();
+    }
+
+    const cacheKey = generateCacheKey(req, options);
+
+    try {
+      const cachedData = await cache.get(cacheKey);
+      if (cachedData) {
+        return res.json(cachedData);
+      }
+
+      // Store original res.json function
+      const originalJson = res.json;
+
+      // Override res.json to cache the response
+      res.json = function (data: any) {
+        cache.set(cacheKey, data, options.ttl);
+        return originalJson.call(this, data);
+      };
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+function generateCacheKey(req: Request, options: CacheOptions): string {
+  const parts = [options.keyPrefix || req.path];
+
+  if (options.varyByTenant && req.tenant) {
+    parts.push(`tenant:${req.tenant.id}`);
+  }
+
+  if (options.varyByUser && req.user) {
+    parts.push(`user:${req.user.id}`);
+  }
+
+  if (options.varyByQuery && options.varyByQuery.length > 0) {
+    const queryParams = options.varyByQuery
+      .map(param => `${param}:${req.query[param] || 'null'}`)
+      .join(',');
+    parts.push(`query:${queryParams}`);
+  }
+
+  return parts.join(':');
+}
+
+// Example Usage in Routes
+router.get('/users',
+  checkPermission('users:list'),
+  cacheMiddleware({
+    ttl: 300, // 5 minutes
+    keyPrefix: 'users:list',
+    varyByTenant: true,
+    varyByQuery: ['page', 'limit', 'search', 'status']
+  }),
+  userController.listUsers
+);
+
+router.get('/tenants/:id',
+  checkPermission('tenants:read'),
+  cacheMiddleware({
+    ttl: 600, // 10 minutes
+    keyPrefix: 'tenants:detail',
+    varyByTenant: true
+  }),
+  tenantController.getTenant
+);
+
+### Cache Invalidation Implementation
+
+```typescript
+// services/cache-invalidation.service.ts
+export class CacheInvalidationService {
+  private cache: CacheService;
+  
+  constructor() {
+    this.cache = new CacheService();
+  }
+
+  async invalidateUserCache(userId: string, tenantId: string): Promise<void> {
+    const patterns = [
+      `users:detail:${userId}*`,
+      `users:list:tenant:${tenantId}*`,
+      `users:permissions:${userId}*`,
+      `users:sessions:${userId}*`
+    ];
+
+    await Promise.all(
+      patterns.map(pattern => this.cache.invalidatePattern(pattern))
+    );
+  }
+
+  async invalidateTenantCache(tenantId: string): Promise<void> {
+    const patterns = [
+      `tenants:detail:${tenantId}*`,
+      `tenants:settings:${tenantId}*`,
+      `tenants:usage:${tenantId}*`,
+      `tenants:users:${tenantId}*`
+    ];
+
+    await Promise.all(
+      patterns.map(pattern => this.cache.invalidatePattern(pattern))
+    );
+  }
+
+  async invalidateRoleCache(roleId: string, tenantId: string): Promise<void> {
+    const patterns = [
+      `roles:detail:${roleId}*`,
+      `roles:list:tenant:${tenantId}*`,
+      `users:permissions:tenant:${tenantId}*`
+    ];
+
+    await Promise.all(
+      patterns.map(pattern => this.cache.invalidatePattern(pattern))
+    );
+  }
+}
+
+// Example Usage in Controllers
+export class UserController {
+  private cacheInvalidation: CacheInvalidationService;
+
+  async updateUser(req: Request, res: Response): Promise<void> {
+    try {
+      const user = await this.userService.updateUser(req.params.id, req.body);
+      
+      // Invalidate relevant caches
+      await this.cacheInvalidation.invalidateUserCache(
+        user.id,
+        req.tenant.id
+      );
+
+      res.json(user);
+    } catch (error) {
+      next(error);
+    }
+  }
+}
+
+### Cache Monitoring and Metrics
+
+```typescript
+// services/cache-metrics.service.ts
+export class CacheMetricsService {
+  private cache: CacheService;
+  private metrics: PrometheusMetrics;
+
+  constructor() {
+    this.cache = new CacheService();
+    this.setupMetrics();
+  }
+
+  private setupMetrics(): void {
+    this.metrics = {
+      cacheHits: new Counter({
+        name: 'cache_hits_total',
+        help: 'Total number of cache hits',
+        labelNames: ['route', 'tenant']
+      }),
+      cacheMisses: new Counter({
+        name: 'cache_misses_total',
+        help: 'Total number of cache misses',
+        labelNames: ['route', 'tenant']
+      }),
+      cacheLatency: new Histogram({
+        name: 'cache_operation_duration_seconds',
+        help: 'Duration of cache operations',
+        labelNames: ['operation', 'route']
+      })
+    };
+  }
+
+  async trackCacheOperation(
+    operation: 'get' | 'set' | 'del',
+    route: string,
+    tenantId: string,
+    startTime: number
+  ): Promise<void> {
+    const duration = Date.now() - startTime;
+    
+    this.metrics.cacheLatency.observe(
+      { operation, route },
+      duration / 1000
+    );
+
+    if (operation === 'get') {
+      this.metrics.cacheHits.inc({
+        route,
+        tenant: tenantId
+      });
+    }
+  }
+}
+```
+
+This implementation adds:
+
+1. Additional Endpoints:
+   - User audit logs and sessions
+   - Tenant usage and backups
+   - Group management
+   - MFA management
+
+2. Caching Features:
+   - Redis-based caching service
+   - Configurable middleware for response caching
+   - Cache key generation with support for variations
+   - Intelligent cache invalidation
+   - Cache metrics and monitoring
+
+3. Performance Optimizations:
+   - Cached responses for read operations
+   - Pattern-based cache invalidation
+   - Tenant-aware caching
+   - Metrics for monitoring cache effectiveness
+
+Would you like me to:
+1. Add more specific caching strategies for certain endpoints?
+2. Implement cache preloading for common queries?
+3. Add more sophisticated cache invalidation patterns?
+4. Implement cache warming strategies?## 10. API Endpoints Implementation
+
+### API Router Setup
+```typescript
+// routes/index.ts
+import express from 'express';
+import userRoutes from './user.routes';
+import tenantRoutes from './tenant.routes';
+import roleRoutes from './role.routes';
+import { authMiddleware } from '../middleware/auth';
+import { tenantMiddleware } from '../middleware/tenant';
+
+const router = express.Router();
+
+// Health check endpoint
+router.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+// API version prefix
+router.use('/api/v1', [
+  authMiddleware,
+  tenantMiddleware,
+  userRoutes,
+  tenantRoutes,
+  roleRoutes
+]);
+
+export default router;
+
+### Request Validation
+```typescript
+// validators/user.validator.ts
+import { body, param, query } from 'express-validator';
+
+export const createUserValidator = [
+  body('email').isEmail().normalizeEmail(),
+  body('firstName').trim().notEmpty(),
+  body('lastName').trim().notEmpty(),
+  body('password')
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/),
+  body('roles').optional().isArray(),
+  body('groups').optional().isArray()
+];
+
+export const updateUserValidator = [
+  param('id').isUUID(),
+  body('email').optional().isEmail().normalizeEmail(),
+  body('firstName').optional().trim().notEmpty(),
+  body('lastName').optional().trim().notEmpty(),
+  body('status').optional().isIn(['active', 'inactive', 'suspended'])
+];
+
+// validators/tenant.validator.ts
+export const createTenantValidator = [
+  body('name').trim().notEmpty(),
+  body('slug').optional().matches(/^[a-z0-9-]+$/),
+  body('securityPolicies').optional().isObject(),
+  body('features').optional().isObject()
+];
+
+// validators/role.validator.ts
+export const createRoleValidator = [
+  body('name').trim().notEmpty()
+    .matches(/^[a-z0-9_]+$/)
+    .withMessage('Role name must contain only lowercase letters, numbers, and underscores'),
+  body('description').optional().trim(),
+  body('permissions').isArray().notEmpty(),
+  body('isSystem').optional().isBoolean()
+];
+
+### User Management API
+```typescript
+// routes/user.routes.ts
+import express from 'express';
+import { UserController } from '../controllers/user.controller';
+import { validateRequest } from '../middleware/validate-request';
+import { checkPermission } from '../middleware/check-permission';
+import {
+  createUserValidator,
+  updateUserValidator
+} from '../validators/user.validator';
+
+const router = express.Router();
+const userController = new UserController();
+
+router.get('/users',
+  checkPermission('users:list'),
+  userController.listUsers
+);
+
+router.post('/users',
+  checkPermission('users:create'),
+  createUserValidator,
+  validateRequest,
+  userController.createUser
+);
+
+router.get('/users/:id',
+  checkPermission('users:read'),
+  userController.getUser
+);
+
+router.patch('/users/:id',
+  checkPermission('users:update'),
+  updateUserValidator,
+  validateRequest,
+  userController.updateUser
+);
+
+router.delete('/users/:id',
+  checkPermission('users:delete'),
+  userController.deleteUser
+);
+
+router.post('/users/:id/roles',
+  checkPermission('users:assign_role'),
+  userController.assignRoles
+);
+
+router.post('/users/:id/groups',
+  checkPermission('users:assign_group'),
+  userController.assignGroups
+);
+
+export default router;
+
+// controllers/user.controller.ts
+export class UserController {
+  private userService: UserService;
+  private auditService: AuditService;
+
+  constructor() {
+    this.userService = new UserService();
+    this.auditService = new AuditService();
+  }
+
+  listUsers = async (req: Request, res: Response) => {
+    try {
+      const { page = 1, limit = 10, search, status } = req.query;
+      
+      const users = await this.userService.listUsers({
+        tenantId: req.tenant.id,
+        page: Number(page),
+        limit: Number(limit),
+        search: search as string,
+        status: status as string
+      });
+
+      res.json({
+        data: users.data,
+        pagination: {
+          total: users.total,
+          page: users.page,
+          pages: users.pages
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  createUser = async (req: Request, res: Response) => {
+    try {
+      const user = await this.userService.createUser({
+        ...req.body,
+        tenantId: req.tenant.id
+      });
+
+      await this.auditService.log({
+        tenantId: req.tenant.id,
+        userId: req.user.id,
+        action: 'user_created',
+        resource: 'user',
+        resourceId: user.id
+      });
+
+      res.status(201).json(user);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Other controller methods...
+}
+
+### Tenant Management API
+```typescript
+// routes/tenant.routes.ts
+import express from 'express';
+import { TenantController } from '../controllers/tenant.controller';
+import { validateRequest } from '../middleware/validate-request';
+import { checkPermission } from '../middleware/check-permission';
+import {
+  createTenantValidator,
+  updateTenantValidator
+} from '../validators/tenant.validator';
+
+const router = express.Router();
+const tenantController = new TenantController();
+
+router.post('/tenants',
+  checkPermission('tenants:create'),
+  createTenantValidator,
+  validateRequest,
+  tenantController.createTenant
+);
+
+router.get('/tenants/:id',
+  checkPermission('tenants:read'),
+  tenantController.getTenant
+);
+
+router.patch('/tenants/:id',
+  checkPermission('tenants:update'),
+  updateTenantValidator,
+  validateRequest,
+  tenantController.updateTenant
+);
+
+router.post('/tenants/:id/suspend',
+  checkPermission('tenants:suspend'),
+  tenantController.suspendTenant
+);
+
+router.post('/tenants/:id/security-policies',
+  checkPermission('tenants:update_security'),
+  tenantController.updateSecurityPolicies
+);
+
+router.post('/tenants/:id/features',
+  checkPermission('tenants:manage_features'),
+  tenantController.updateFeatures
+);
+
+export default router;
+
+// controllers/tenant.controller.ts
+export class TenantController {
+  private tenantService: TenantService;
+  private auditService: AuditService;
+
+  constructor() {
+    this.tenantService = new TenantService();
+    this.auditService = new AuditService();
+  }
+
+  createTenant = async (req: Request, res: Response) => {
+    try {
+      const tenant = await this.tenantService.createTenant(req.body);
+
+      await this.auditService.log({
+        tenantId: tenant.id,
+        userId: req.user.id,
+        action: 'tenant_created',
+        resource: 'tenant',
+        resourceId: tenant.id
+      });
+
+      res.status(201).json(tenant);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Other controller methods...
+}
+
+### Role Management API
+```typescript
+// routes/role.routes.ts
+import express from 'express';
+import { RoleController } from '../controllers/role.controller';
+import { validateRequest } from '../middleware/validate-request';
+import { checkPermission } from '../middleware/check-permission';
+import {
+  createRoleValidator,
+  updateRoleValidator
+} from '../validators/role.validator';
+
+const router = express.Router();
+const roleController = new RoleController();
+
+router.get('/roles',
+  checkPermission('roles:list'),
+  roleController.listRoles
+);
+
+router.post('/roles',
+  checkPermission('roles:create'),
+  createRoleValidator,
+  validateRequest,
+  roleController.createRole
+);
+
+router.get('/roles/:id',
+  checkPermission('roles:read'),
+  roleController.getRole
+);
+
+router.patch('/roles/:id',
+  checkPermission('roles:update'),
+  updateRoleValidator,
+  validateRequest,
+  roleController.updateRole
+);
+
+router.delete('/roles/:id',
+  checkPermission('roles:delete'),
+  roleController.deleteRole
+);
+
+router.get('/roles/:id/users',
+  checkPermission('roles:list_users'),
+  roleController.listRoleUsers
+);
+
+router.post('/roles/:id/permissions',
+  checkPermission('roles:manage_permissions'),
+  roleController.updatePermissions
+);
+
+export default router;
+
+// controllers/role.controller.ts
+export class RoleController {
+  private roleService: RBACService;
+  private auditService: AuditService;
+
+  constructor() {
+    this.roleService = new RBACService();
+    this.auditService = new AuditService();
+  }
+
+  createRole = async (req: Request, res: Response) => {
+    try {
+      const role = await this.roleService.createRole({
+        ...req.body,
+        tenantId: req.tenant.id
+      });
+
+      await this.auditService.log({
+        tenantId: req.tenant.id,
+        userId: req.user.id,
+        action: 'role_created',
+        resource: 'role',
+        resourceId: role.id,
+        metadata: {
+          name: role.name,
+          permissions: role.permissions
+        }
+      });
+
+      res.status(201).json(role);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Other controller methods...
+}
+
+### Error Handling
+```typescript
+// middleware/error-handler.ts
+export const errorHandler = (
+  error: any,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  // Log error
+  console.error(error);
+
+  if (error.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation Error',
+      details: error.details
+    });
+  }
+
+  if (error.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: error.message
+    });
+  }
+
+  if (error.name === 'ForbiddenError') {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: error.message
+    });
+  }
+
+  if (error.name === 'NotFoundError') {
+    return res.status(404).json({
+      error: 'Not Found',
+      message: error.message
+    });
+  }
+
+  // Default error
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: 'An unexpected error occurred'
+  });
+};
+
+### API Documentation
+```typescript
+/**
+ * @api {post} /api/v1/users Create User
+ * @apiName CreateUser
+ * @apiGroup User Management
+ * @apiVersion 1.0.0
+ *
+ * @apiHeader {String} Authorization Bearer token
+ * @apiHeader {String} x-tenant Tenant identifier
+ *
+ * @apiParam {String} email User's email
+ * @apiParam {String} firstName User's first name
+ * @apiParam {String} lastName User's last name
+ * @apiParam {String} password User's password
+ * @apiParam {String[]} [roles] Array of role IDs
+ * @apiParam {String[]} [groups] Array of group IDs
+ *
+ * @apiSuccess {String} id User ID
+ * @apiSuccess {String} email User's email
+ * @apiSuccess {String} firstName User's first name
+ * @apiSuccess {String} lastName User's last name
+ * @apiSuccess {String} status User's status
+ * @apiSuccess {Object} profile User's profile data
+ *
+ * @apiError (400) ValidationError Invalid input data
+ * @apiError (401) UnauthorizedError Invalid or missing authentication
+ * @apiError (403) ForbiddenError Insufficient permissions
+ */
+```
+
+This implementation provides:
+1. Complete REST APIs for user, tenant, and role management
+2. Request validation
+3. Permission checking
+4. Error handling
+5. Audit logging
+6. API documentation
+
+Would you like me to:
+1. Add more specific endpoints?
+2. Implement response caching?
+3. Add rate limiting per endpoint?
+4. Add API versioning strategy?## 9. Role-Based Access Control Implementation
+
+### Core RBAC Models
+```typescript
+// models/role.ts
+export class Role extends Model {
+  public id!: string;
+  public tenantId!: string;
+  public name!: string;
+  public description?: string;
+  public isSystem!: boolean;
+  public permissions!: string[];
+  public metadata!: object;
+}
+
+export const initRoleModel = (sequelize: Sequelize) => {
+  Role.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    tenantId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'id'
+      }
+    },
+    name: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    description: DataTypes.TEXT,
+    isSystem: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    permissions: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      defaultValue: []
+    },
+    metadata: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    }
+  }, {
+    sequelize,
+    tableName: 'roles',
+    indexes: [
+      { fields: ['tenantId'] },
+      { unique: true, fields: ['tenantId', 'name'] }
+    ]
+  });
+};
+
+// models/permission.ts
+export class Permission extends Model {
+  public id!: string;
+  public name!: string;
+  public description?: string;
+  public scope!: string;
+  public actions!: string[];
+  public constraints?: object;
+  public isSystem!: boolean;
+}
+
+export const initPermissionModel = (sequelize: Sequelize) => {
+  Permission.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    name: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      unique: true
+    },
+    description: DataTypes.TEXT,
+    scope: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    actions: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      defaultValue: []
+    },
+    constraints: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    },
+    isSystem: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    }
+  }, {
+    sequelize,
+    tableName: 'permissions'
+  });
+};
+
+### RBAC Service Implementation
+```typescript
+// services/rbac.service.ts
+export class RBACService {
+  private readonly cache: RedisService;
+  
+  constructor() {
+    this.cache = new RedisService();
+  }
+
+  async createRole(data: CreateRoleDTO): Promise<Role> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Validate permissions
+      const validPermissions = await Permission.findAll({
+        where: {
+          name: { [Op.in]: data.permissions }
+        }
+      });
+
+      if (validPermissions.length !== data.permissions.length) {
+        throw new Error('Invalid permissions specified');
+      }
+
+      const role = await Role.create({
+        tenantId: data.tenantId,
+        name: data.name,
+        description: data.description,
+        permissions: data.permissions,
+        metadata: data.metadata
+      }, { transaction });
+
+      await transaction.commit();
+
+      // Invalidate cache
+      await this.invalidateRoleCache(data.tenantId);
+
+      return role;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async assignRoleToUser(
+    userId: string,
+    roleId: string,
+    context: {
+      tenantId: string;
+      groupId?: string;
+    }
+  ): Promise<void> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Verify role belongs to tenant
+      const role = await Role.findOne({
+        where: {
+          id: roleId,
+          tenantId: context.tenantId
+        }
+      });
+
+      if (!role) {
+        throw new Error('Role not found');
+      }
+
+      // Create role assignment
+      await UserRole.create({
+        userId,
+        roleId,
+        tenantId: context.tenantId,
+        groupId: context.groupId,
+        assignedAt: new Date()
+      }, { transaction });
+
+      // Update user's cached permissions
+      await this.invalidateUserPermissionsCache(userId, context.tenantId);
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async checkPermission(
+    userId: string,
+    permission: string,
+    context: {
+      tenantId: string;
+      resourceId?: string;
+    }
+  ): Promise<boolean> {
+    // Check cache first
+    const cacheKey = `permissions:${userId}:${context.tenantId}`;
+    let userPermissions = await this.cache.get(cacheKey);
+
+    if (!userPermissions) {
+      // Get user's roles and permissions
+      userPermissions = await this.getUserPermissions(userId, context.tenantId);
+      
+      // Cache permissions
+      await this.cache.set(cacheKey, userPermissions, 'EX', 300); // 5 minutes
+    }
+
+    // Check if user has the required permission
+    return this.matchPermission(userPermissions, permission, context);
+  }
+
+  private async getUserPermissions(
+    userId: string,
+    tenantId: string
+  ): Promise<string[]> {
+    // Get user's direct role assignments
+    const userRoles = await UserRole.findAll({
+      where: { userId, tenantId }
+    });
+
+    // Get user's group role assignments
+    const userGroups = await UserGroup.findAll({
+      where: { userId }
+    });
+
+    const groupRoles = await GroupRole.findAll({
+      where: {
+        groupId: { [Op.in]: userGroups.map(g => g.groupId) }
+      }
+    });
+
+    // Combine all roles
+    const allRoleIds = [
+      ...userRoles.map(r => r.roleId),
+      ...groupRoles.map(r => r.roleId)
+    ];
+
+    // Get all permissions from roles
+    const roles = await Role.findAll({
+      where: {
+        id: { [Op.in]: allRoleIds },
+        tenantId
+      }
+    });
+
+    // Combine and deduplicate permissions
+    return [...new Set(
+      roles.flatMap(role => role.permissions)
+    )];
+  }
+
+  private matchPermission(
+    userPermissions: string[],
+    requiredPermission: string,
+    context: { resourceId?: string }
+  ): boolean {
+    // Handle wildcard permissions
+    if (userPermissions.includes('*')) return true;
+
+    const [requiredResource, requiredAction] = requiredPermission.split(':');
+
+    for (const permission of userPermissions) {
+      const [resource, action] = permission.split(':');
+
+      // Check resource match
+      if (resource !== '*' && resource !== requiredResource) continue;
+
+      // Check action match
+      if (action === '*' || action === requiredAction) {
+        // If there's a resource ID constraint, check it
+        if (context.resourceId) {
+          const constraint = this.getPermissionConstraint(permission);
+          if (!this.matchesConstraint(constraint, context)) {
+            continue;
+          }
+        }
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private getPermissionConstraint(permission: string): object | null {
+    // Implementation for getting permission constraints
+    // This could include owner-only restrictions, time-based restrictions, etc.
+    return null;
+  }
+
+  private matchesConstraint(
+    constraint: object | null,
+    context: { resourceId?: string }
+  ): boolean {
+    if (!constraint) return true;
+    // Implementation for checking constraints
+    return true;
+  }
+}
+
+### Permission Inheritance and Scope Management
+```typescript
+// services/permission-scope.service.ts
+export class PermissionScopeService {
+  private scopeTree: Map<string, Set<string>> = new Map();
+
+  constructor() {
+    this.buildScopeTree();
+  }
+
+  private async buildScopeTree(): Promise<void> {
+    const permissions = await Permission.findAll();
+
+    permissions.forEach(permission => {
+      const scopeParts = permission.scope.split('.');
+      let currentScope = '';
+
+      scopeParts.forEach((part, index) => {
+        const scope = scopeParts.slice(0, index + 1).join('.');
+        const parentScope = scopeParts.slice(0, index).join('.');
+
+        if (!this.scopeTree.has(scope)) {
+          this.scopeTree.set(scope, new Set());
+        }
+
+        if (parentScope) {
+          const parentSet = this.scopeTree.get(parentScope);
+          if (parentSet) {
+            parentSet.add(scope);
+          }
+        }
+      });
+    });
+  }
+
+  expandScope(scope: string): string[] {
+    const expanded = new Set<string>();
+    const queue = [scope];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      expanded.add(current);
+
+      const children = this.scopeTree.get(current);
+      if (children) {
+        queue.push(...children);
+      }
+    }
+
+    return Array.from(expanded);
+  }
+}
+
+### Default System Roles
+```typescript
+const DEFAULT_SYSTEM_ROLES = [
+  {
+    name: 'tenant_admin',
+    description: 'Full access to all tenant resources',
+    permissions: ['*'],
+    isSystem: true
+  },
+  {
+    name: 'user_manager',
+    description: 'Manage users and their access',
+    permissions: [
+      'users:read',
+      'users:create',
+      'users:update',
+      'users:delete',
+      'roles:read',
+      'roles:assign'
+    ],
+    isSystem: true
+  },
+  {
+    name: 'content_manager',
+    description: 'Manage content and documents',
+    permissions: [
+      'content:*',
+      'documents:*',
+      'media:*'
+    ],
+    isSystem: true
+  },
+  {
+    name: 'viewer',
+    description: 'Read-only access to resources',
+    permissions: [
+      '*:read',
+      '*:list'
+    ],
+    isSystem: true
+  }
+];
+
+### Role Assignment Policies
+```typescript
+interface RoleAssignmentPolicy {
+  requiredPermissions: string[];
+  constraints?: {
+    maxAssignments?: number;
+    restrictedRoles?: string[];
+    allowSelfAssignment?: boolean;
+    requireApproval?: boolean;
+  };
+}
+
+const ROLE_ASSIGNMENT_POLICIES: Record<string, RoleAssignmentPolicy> = {
+  tenant_admin: {
+    requiredPermissions: ['roles:assign:admin'],
+    constraints: {
+      restrictedRoles: ['tenant_admin'],
+      allowSelfAssignment: false,
+      requireApproval: true
+    }
+  },
+  user_manager: {
+    requiredPermissions: ['roles:assign:standard'],
+    constraints: {
+      restrictedRoles: ['tenant_admin', 'user_manager'],
+      maxAssignments: 100
+    }
+  },
+  default: {
+    requiredPermissions: ['roles:assign:basic'],
+    constraints: {
+      maxAssignments: 10,
+      restrictedRoles: ['tenant_admin', 'user_manager']
+    }
+  }
+};
+```
+
+This RBAC implementation provides:
+1. Hierarchical role and permission management
+2. Permission inheritance and scope expansion
+3. Fine-grained access control with constraints
+4. Efficient caching of permissions
+5. Default system roles
+6. Role assignment policies
+
+Would you like me to:
+1. Add more default roles and permissions?
+2. Implement role-based API endpoints?
+3. Add more sophisticated constraint checking?
+4. Implement role approval workflows?## 8. Authentication System Implementation
+
+### Core Authentication Models
+```typescript
+// models/oauth-client.ts
+export class OAuthClient extends Model {
+  public id!: string;
+  public tenantId!: string;
+  public name!: string;
+  public clientId!: string;
+  public clientSecret!: string;
+  public type!: 'confidential' | 'public';
+  public grantTypes!: string[];
+  public redirectUris!: string[];
+  public scopes!: string[];
+}
+
+export const initOAuthClientModel = (sequelize: Sequelize) => {
+  OAuthClient.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    tenantId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'id'
+      }
+    },
+    name: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    clientId: {
+      type: DataTypes.STRING(32),
+      unique: true,
+      allowNull: false
+    },
+    clientSecret: {
+      type: DataTypes.STRING(64),
+      allowNull: false
+    },
+    type: {
+      type: DataTypes.ENUM('confidential', 'public'),
+      allowNull: false
+    },
+    grantTypes: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: false
+    },
+    redirectUris: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: false
+    },
+    scopes: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: false
+    }
+  }, {
+    sequelize,
+    tableName: 'oauth_clients'
+  });
+};
+
+// models/oauth-token.ts
+export class OAuthToken extends Model {
+  public id!: string;
+  public accessToken!: string;
+  public refreshToken?: string;
+  public userId?: string;
+  public clientId!: string;
+  public scopes!: string[];
+  public expiresAt!: Date;
+  public refreshExpiresAt?: Date;
+}
+
+// models/mfa.ts
+export class MFASettings extends Model {
+  public id!: string;
+  public userId!: string;
+  public type!: 'totp' | 'webauthn';
+  public secret?: string;
+  public devices?: object[];
+  public backupCodes?: string[];
+  public isEnabled!: boolean;
+}
+
+### OAuth2 Server Implementation
+```typescript
+// services/oauth.service.ts
+import OAuth2Server, { Request, Response } from 'oauth2-server';
+import { RedisService } from './redis.service';
+
+export class OAuthService {
+  private oauth: OAuth2Server;
+  private readonly redis: RedisService;
+
+  constructor() {
+    this.redis = new RedisService();
+    this.oauth = new OAuth2Server({
+      model: this.getOAuthModel(),
+      accessTokenLifetime: 3600, // 1 hour
+      refreshTokenLifetime: 2592000, // 30 days
+      allowBearerTokensInQueryString: false,
+      allowExtendedTokenAttributes: true
+    });
+  }
+
+  private getOAuthModel(): OAuth2Server.Model {
+    return {
+      getAccessToken: async (accessToken) => {
+        // Try cache first
+        const cached = await this.redis.get(`token:${accessToken}`);
+        if (cached) return JSON.parse(cached);
+
+        const token = await OAuthToken.findOne({
+          where: { accessToken },
+          include: [
+            { model: User, as: 'user' },
+            { model: OAuthClient, as: 'client' }
+          ]
+        });
+
+        if (!token) return null;
+
+        // Cache for future requests
+        await this.redis.set(
+          `token:${accessToken}`,
+          JSON.stringify(token),
+          'EX',
+          3600
+        );
+
+        return token;
+      },
+
+      getClient: async (clientId, clientSecret) => {
+        const query: any = { clientId };
+        if (clientSecret) {
+          query.clientSecret = clientSecret;
+        }
+
+        return await OAuthClient.findOne({ where: query });
+      },
+
+      saveToken: async (token, client, user) => {
+        const accessToken = await OAuthToken.create({
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+          userId: user?.id,
+          clientId: client.id,
+          scopes: token.scope,
+          expiresAt: token.accessTokenExpiresAt,
+          refreshExpiresAt: token.refreshTokenExpiresAt
+        });
+
+        // Cache the token
+        await this.redis.set(
+          `token:${token.accessToken}`,
+          JSON.stringify(accessToken),
+          'EX',
+          3600
+        );
+
+        return {
+          ...token,
+          client,
+          user
+        };
+      },
+
+      revokeToken: async (token) => {
+        await OAuthToken.destroy({
+          where: { refreshToken: token.refreshToken }
+        });
+
+        // Remove from cache
+        await this.redis.del(`token:${token.accessToken}`);
+
+        return true;
+      },
+
+      validateScope: async (user, client, scope) => {
+        if (!scope) return false;
+
+        const requestedScopes = scope.split(' ');
+        const validScopes = await this.getValidScopes(user, client);
+
+        return requestedScopes.every(s => validScopes.includes(s))
+          ? scope
+          : false;
+      }
+    };
+  }
+}
+
+### Google SSO Implementation
+```typescript
+// services/sso.service.ts
+import { OAuth2Client } from 'google-auth-library';
+
+export class GoogleSSOService {
+  private client: OAuth2Client;
+
+  constructor() {
+    this.client = new OAuth2Client({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      redirectUri: `${process.env.APP_URL}/auth/google/callback`
+    });
+  }
+
+  async verifyGoogleToken(token: string): Promise<GoogleUserInfo> {
+    const ticket = await this.client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) throw new Error('Invalid token');
+
+    return {
+      email: payload.email!,
+      name: payload.name!,
+      picture: payload.picture,
+      locale: payload.locale
+    };
+  }
+
+  async handleGoogleLogin(token: string): Promise<AuthResponse> {
+    const googleUser = await this.verifyGoogleToken(token);
+
+    // Find or create user
+    let user = await User.findOne({
+      where: { email: googleUser.email }
+    });
+
+    if (!user) {
+      user = await User.create({
+        email: googleUser.email,
+        status: 'active',
+        profile: {
+          firstName: googleUser.name.split(' ')[0],
+          lastName: googleUser.name.split(' ').slice(1).join(' '),
+          avatar: googleUser.picture
+        }
+      });
+    }
+
+    // Create OAuth token
+    const token = await this.oauthService.generateToken(user, ['read', 'write']);
+
+    return {
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken,
+      expiresIn: 3600,
+      user: {
+        id: user.id,
+        email: user.email,
+        profile: user.profile
+      }
+    };
+  }
+}
+
+### MFA Implementation
+```typescript
+// services/mfa.service.ts
+import { authenticator } from 'otplib';
+import { createHash } from 'crypto';
+import QRCode from 'qrcode';
+
+export class MFAService {
+  async setupTOTP(userId: string): Promise<TOTPSetupResponse> {
+    const user = await User.findByPk(userId);
+    if (!user) throw new Error('User not found');
+
+    const secret = authenticator.generateSecret();
+    const otpauthUrl = authenticator.keyuri(
+      user.email,
+      'YourApp',
+      secret
+    );
+
+    // Generate backup codes
+    const backupCodes = Array.from({ length: 10 }, () =>
+      crypto.randomBytes(4).toString('hex')
+    );
+
+    // Hash backup codes before storing
+    const hashedBackupCodes = backupCodes.map(code =>
+      createHash('sha256').update(code).digest('hex')
+    );
+
+    await MFASettings.create({
+      userId,
+      type: 'totp',
+      secret,
+      backupCodes: hashedBackupCodes,
+      isEnabled: false
+    });
+
+    const qrCode = await QRCode.toDataURL(otpauthUrl);
+
+    return {
+      secret,
+      qrCode,
+      backupCodes
+    };
+  }
+
+  async verifyAndEnableTOTP(
+    userId: string,
+    token: string
+  ): Promise<boolean> {
+    const mfaSettings = await MFASettings.findOne({
+      where: { userId, type: 'totp' }
+    });
+
+    if (!mfaSettings || !mfaSettings.secret) {
+      throw new Error('TOTP not set up');
+    }
+
+    const isValid = authenticator.verify({
+      token,
+      secret: mfaSettings.secret
+    });
+
+    if (isValid) {
+      await mfaSettings.update({ isEnabled: true });
+      return true;
+    }
+
+    return false;
+  }
+
+  async setupWebAuthn(userId: string): Promise<PublicKeyCredentialCreationOptions> {
+    // Implementation for WebAuthn registration
+    // This would include creating a challenge and storing it
+    // Returns the options needed for the client to create credentials
+  }
+
+  async verifyWebAuthnRegistration(
+    userId: string,
+    credential: PublicKeyCredential
+  ): Promise<boolean> {
+    // Implementation for verifying WebAuthn registration
+    // This would verify the attestation and store the credential
+  }
+}
+
+### Passkey Support
+```typescript
+// services/passkey.service.ts
+export class PasskeyService {
+  async registerPasskey(userId: string): Promise<RegistrationOptions> {
+    const user = await User.findByPk(userId);
+    if (!user) throw new Error('User not found');
+
+    // Generate registration options
+    const options = await generateRegistrationOptions({
+      rpName: 'Your App',
+      rpID: process.env.RP_ID!,
+      userID: user.id,
+      userName: user.email,
+      attestationType: 'none',
+      authenticatorSelection: {
+        residentKey: 'required',
+        userVerification: 'required'
+      }
+    });
+
+    // Store challenge
+    await this.redis.set(
+      `passkey:challenge:${user.id}`,
+      options.challenge,
+      'EX',
+      300 // 5 minutes
+    );
+
+    return options;
+  }
+
+  async verifyRegistration(
+    userId: string,
+    credential: RegistrationResponseJSON
+  ): Promise<boolean> {
+    const challenge = await this.redis.get(`passkey:challenge:${userId}`);
+    if (!challenge) throw new Error('Challenge expired');
+
+    const verification = await verifyRegistrationResponse({
+      response: credential,
+      expectedChallenge: challenge,
+      expectedOrigin: process.env.APP_URL!,
+      expectedRPID: process.env.RP_ID!
+    });
+
+    if (verification.verified) {
+      await MFASettings.create({
+        userId,
+        type: 'webauthn',
+        devices: [{
+          credentialID: verification.registrationInfo?.credentialID,
+          publicKey: verification.registrationInfo?.credentialPublicKey,
+          counter: verification.registrationInfo?.counter
+        }],
+        isEnabled: true
+      });
+
+      return true;
+    }
+
+    return false;
+  }
+}
+
+### Rate Limiting and Security
+```typescript
+// middleware/rate-limit.ts
+export const createRateLimiter = (
+  options: {
+    points: number;
+    duration: number;
+    blockDuration?: number;
+    keyPrefix?: string;
+  }
+) => {
+  const limiter = new RateLimiterRedis({
+    storeClient: redis,
+    keyPrefix: options.keyPrefix || 'rate_limit',
+    points: options.points,
+    duration: options.duration,
+    blockDuration: options.blockDuration
+  });
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const key = `${req.ip}:${req.tenant?.id || 'global'}`;
+      await limiter.consume(key);
+      next();
+    } catch (error) {
+      res.status(429).json({
+        error: 'Too many requests',
+        retryAfter: error.msBeforeNext / 1000
+      });
+    }
+  };
+};
+
+// Apply rate limiters
+app.use('/auth/login', createRateLimiter({
+  points: 5,
+  duration: 60,
+  blockDuration: 300,
+  keyPrefix: 'login'
+}));
+
+app.use('/auth/mfa/verify', createRateLimiter({
+  points: 3,
+  duration: 60,
+  blockDuration: 300,
+  keyPrefix: 'mfa'
+}));
+```
+
+This implementation provides:
+1. Complete OAuth2 server with token management
+2. Google SSO integration
+3. TOTP-based MFA
+4. WebAuthn/Passkey support
+5. Rate limiting for security
+6. Redis caching for performance
+
+Would you like me to:
+1. Add more SSO providers (Microsoft, GitHub)?
+2. Implement session management?
+3. Add more security features?
+4. Create the API endpoints for these services?## 7. User Management Implementation
+
+### Core User Models and Types
+```typescript
+// types/user.types.ts
+interface UserProfile {
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  avatar?: string;
+  customFields: Record<string, any>;
+  preferences: {
+    language: string;
+    timezone: string;
+    notifications: NotificationPreferences;
+  };
+}
+
+interface NotificationPreferences {
+  email: boolean;
+  inApp: boolean;
+  categories: {
+    security: boolean;
+    updates: boolean;
+    marketing: boolean;
+  };
+}
+
+// models/user-profile.ts
+export class UserProfile extends Model {
+  public id!: string;
+  public userId!: string;
+  public data!: UserProfile;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+}
+
+export const initUserProfileModel = (sequelize: Sequelize) => {
+  UserProfile.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    data: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {
+        customFields: {},
+        preferences: {
+          language: 'en',
+          timezone: 'UTC',
+          notifications: {
+            email: true,
+            inApp: true,
+            categories: {
+              security: true,
+              updates: true,
+              marketing: false
+            }
+          }
+        }
+      }
+    }
+  }, {
+    sequelize,
+    tableName: 'user_profiles',
+    indexes: [
+      { fields: ['userId'] }
+    ]
+  });
+};
+```
+
+### User Management Service
+```typescript
+// services/user.service.ts
+export class UserService {
+  constructor(
+    private emailService: EmailService,
+    private securityService: SecurityService
+  ) {}
+
+  async createUser(data: CreateUserDTO): Promise<User> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Check if email exists
+      const existingUser = await User.findOne({
+        where: { email: data.email }
+      });
+
+      if (existingUser) {
+        throw new Error('Email already registered');
+      }
+
+      // Create user
+      const user = await User.create({
+        email: data.email,
+        hashedPassword: await bcrypt.hash(data.password, 12),
+        status: 'pending_verification',
+        verificationToken: crypto.randomBytes(32).toString('hex')
+      }, { transaction });
+
+      // Create profile
+      await UserProfile.create({
+        userId: user.id,
+        data: {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          customFields: {},
+          preferences: {
+            language: data.language || 'en',
+            timezone: data.timezone || 'UTC',
+            notifications: {
+              email: true,
+              inApp: true,
+              categories: {
+                security: true,
+                updates: true,
+                marketing: false
+              }
+            }
+          }
+        }
+      }, { transaction });
+
+      // Send verification email
+      await this.emailService.queueEmail({
+        to: user.email,
+        template: 'user/verification',
+        templateData: {
+          verificationLink: `${process.env.APP_URL}/verify-email/${user.verificationToken}`
+        }
+      });
+
+      await transaction.commit();
+      return user;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  async updateUser(userId: string, data: UpdateUserDTO): Promise<User> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const user = await User.findByPk(userId, { transaction });
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Update basic user info
+      if (data.email && data.email !== user.email) {
+        await this.handleEmailChange(user, data.email, transaction);
+      }
+
+      // Update profile
+      if (data.profile) {
+        await UserProfile.update(
+          { data: { ...user.profile.data, ...data.profile } },
+          { 
+            where: { userId },
+            transaction 
+          }
+        );
+      }
+
+      await transaction.commit();
+      return user.reload();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  private async handleEmailChange(
+    user: User,
+    newEmail: string,
+    transaction: Transaction
+  ): Promise<void> {
+    // Check if new email is available
+    const existingUser = await User.findOne({
+      where: { email: newEmail }
+    });
+
+    if (existingUser) {
+      throw new Error('Email already in use');
+    }
+
+    // Generate verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    // Update user with pending email change
+    await user.update({
+      pendingEmail: newEmail,
+      emailVerificationToken: verificationToken
+    }, { transaction });
+
+    // Send verification email
+    await this.emailService.queueEmail({
+      to: newEmail,
+      template: 'user/email-verification',
+      templateData: {
+        verificationLink: `${process.env.APP_URL}/verify-email-change/${verificationToken}`
+      }
+    });
+  }
+
+  async deactivateUser(userId: string): Promise<void> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      const user = await User.findByPk(userId, { transaction });
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Deactivate user
+      await user.update({
+        status: 'inactive',
+        deactivatedAt: new Date()
+      }, { transaction });
+
+      // Revoke all active sessions
+      await this.securityService.revokeAllSessions(userId, transaction);
+
+      // Log security event
+      await this.securityService.logSecurityEvent({
+        userId,
+        event: 'account_deactivated',
+        metadata: {
+          reason: 'user_requested'
+        }
+      }, transaction);
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+}
+
+### User Group Management
+```typescript
+// models/group.ts
+export class Group extends Model {
+  public id!: string;
+  public tenantId!: string;
+  public name!: string;
+  public description?: string;
+  public parentId?: string;
+  public path!: string;
+  public metadata!: object;
+}
+
+export const initGroupModel = (sequelize: Sequelize) => {
+  Group.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    tenantId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'id'
+      }
+    },
+    name: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    description: {
+      type: DataTypes.TEXT
+    },
+    parentId: {
+      type: DataTypes.UUID,
+      references: {
+        model: 'groups',
+        key: 'id'
+      }
+    },
+    path: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    metadata: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    }
+  }, {
+    sequelize,
+    tableName: 'groups',
+    indexes: [
+      { fields: ['tenantId'] },
+      { fields: ['parentId'] },
+      { fields: ['path'] }
+    ]
+  });
+};
+
+// services/group.service.ts
+export class GroupService {
+  async createGroup(data: CreateGroupDTO): Promise<Group> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      let path = '';
+      if (data.parentId) {
+        const parentGroup = await Group.findByPk(data.parentId, { transaction });
+        if (!parentGroup) {
+          throw new Error('Parent group not found');
+        }
+        path = `${parentGroup.path}.${this.generatePathSegment(data.name)}`;
+      } else {
+        path = this.generatePathSegment(data.name);
+      }
+
+      const group = await Group.create({
+        ...data,
+        path,
+        metadata: {
+          createdBy: data.userId,
+          department: data.department,
+          costCenter: data.costCenter
+        }
+      }, { transaction });
+
+      await transaction.commit();
+      return group;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  private generatePathSegment(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+  }
+
+  async addUserToGroup(
+    userId: string,
+    groupId: string,
+    roles: string[]
+  ): Promise<void> {
+    await UserGroup.create({
+      userId,
+      groupId,
+      roles
+    });
+  }
+
+  async getGroupHierarchy(tenantId: string): Promise<GroupHierarchy[]> {
+    const groups = await Group.findAll({
+      where: { tenantId },
+      order: [['path', 'ASC']]
+    });
+
+    return this.buildHierarchy(groups);
+  }
+
+  private buildHierarchy(groups: Group[]): GroupHierarchy[] {
+    const hierarchy: GroupHierarchy[] = [];
+    const lookup: Record<string, GroupHierarchy> = {};
+
+    groups.forEach(group => {
+      const node: GroupHierarchy = {
+        id: group.id,
+        name: group.name,
+        children: []
+      };
+      lookup[group.id] = node;
+
+      if (group.parentId && lookup[group.parentId]) {
+        lookup[group.parentId].children.push(node);
+      } else {
+        hierarchy.push(node);
+      }
+    });
+
+    return hierarchy;
+  }
+}
+```
+
+This implementation provides:
+1. Comprehensive user management with profiles
+2. Secure email change process
+3. User deactivation with session management
+4. Hierarchical group management
+5. Transaction support for data integrity
+
+Would you like me to:
+1. Add the authentication implementation next?
+2. Add more user management features?
+3. Implement role-based access control?
+4. Add API endpoints for these services?### Additional Email Templates
+
+```
+src/
+  templates/
+    emails/
+      layouts/
+        base.hbs
+        marketing.hbs
+        notification.hbs
+      partials/
+        header.hbs
+        footer.hbs
+        button.hbs
+        logo.hbs
+        social-links.hbs
+      components/
+        alert-box.hbs
+        info-box.hbs
+        action-button.hbs
+        data-table.hbs
+      user/
+        invitation.hbs
+        password-reset.hbs
+        welcome.hbs
+        login-alert.hbs
+        mfa-enabled.hbs
+        mfa-disabled.hbs
+        profile-updated.hbs
+        email-changed.hbs
+        password-changed.hbs
+        account-locked.hbs
+        role-changed.hbs
+      tenant/
+        created.hbs
+        suspended.hbs
+        reactivated.hbs
+        deleted.hbs
+        limit-warning.hbs
+        payment-due.hbs
+        settings-updated.hbs
+        feature-enabled.hbs
+        security-policy-updated.hbs
+      admin/
+        user-reported.hbs
+        security-breach.hbs
+        usage-report.hbs
+        audit-summary.hbs
+      notifications/
+        mention.hbs
+        task-assigned.hbs
+        comment-added.hbs
+        document-shared.hbs
+```
+
+### Base Layout Template
+```handlebars
+{{!-- layouts/base.hbs --}}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{subject}}</title>
+  <style>
+    /* Base styles */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #2d3748;
+      margin: 0;
+      padding: 0;
+      background-color: #f7fafc;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+    }
+    .header {
+      text-align: center;
+      padding: 20px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px 0;
+      border-top: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #718096;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #4299e1;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .alert {
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+    .alert-warning {
+      background-color: #fff3cd;
+      border: 1px solid #ffeeba;
+      color: #856404;
+    }
+    .alert-success {
+      background-color: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    {{> header}}
+    {{{body}}}
+    {{> footer}}
+  </div>
+  {{#if trackingPixel}}
+    <img src="{{trackingPixel}}" alt="" width="1" height="1" />
+  {{/if}}
+</body>
+</html>
+```
+
+### User-related Templates
+```handlebars
+{{!-- user/login-alert.hbs --}}
+<div class="security-alert">
+  <h2>New Login Detected</h2>
+  <div class="alert alert-warning">
+    <p>A new login was detected from:</p>
+    <ul>
+      <li>Device: {{deviceInfo}}</li>
+      <li>Location: {{location}}</li>
+      <li>IP Address: {{ipAddress}}</li>
+      <li>Time: {{timestamp}}</li>
+    </ul>
+    {{#if isUnusualActivity}}
+      <p><strong>This location is unusual for your account.</strong></p>
+    {{/if}}
+  </div>
+  <p>If this wasn't you, please secure your account immediately:</p>
+  {{> action-button text="Secure Account" url=securityUrl}}
+</div>
+
+{{!-- user/mfa-enabled.hbs --}}
+<div class="security-update">
+  <h2>Two-Factor Authentication Enabled</h2>
+  <div class="alert alert-success">
+    <p>Two-factor authentication has been successfully enabled for your account.</p>
+  </div>
+  <div class="info-box">
+    <h3>Recovery Codes</h3>
+    <p>Please save these recovery codes in a secure location. You can use them to access your account if you lose your 2FA device:</p>
+    <pre>{{#each recoveryCodes}}
+      {{this}}
+    {{/each}}</pre>
+  </div>
+  {{> action-button text="View Security Settings" url=securitySettingsUrl}}
+</div>
+
+{{!-- user/role-changed.hbs --}}
+<div class="role-update">
+  <h2>Role Update in {{tenantName}}</h2>
+  <p>Your role has been updated in the organization {{tenantName}}.</p>
+  
+  <div class="changes-table">
+    <table>
+      <tr>
+        <th>Previous Role(s)</th>
+        <th>New Role(s)</th>
+      </tr>
+      <tr>
+        <td>{{previousRoles}}</td>
+        <td>{{newRoles}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <p>This change was made by {{changedBy}} on {{changeDate}}.</p>
+  
+  {{#if additionalPermissions}}
+    <div class="info-box">
+      <h3>New Permissions</h3>
+      <ul>
+        {{#each additionalPermissions}}
+          <li>{{this}}</li>
+        {{/each}}
+      </ul>
+    </div>
+  {{/if}}
+
+  {{> action-button text="View My Access" url=accessSettingsUrl}}
+</div>
+```
+
+### Tenant-related Templates
+```handlebars
+{{!-- tenant/limit-warning.hbs --}}
+<div class="usage-warning">
+  <h2>Resource Usage Warning</h2>
+  <div class="alert alert-warning">
+    <h3>{{tenantName}} is approaching resource limits</h3>
+    <p>Your organization has reached {{usagePercentage}}% of its allocated {{resourceType}}.</p>
+  </div>
+
+  <div class="usage-details">
+    <table>
+      <tr>
+        <th>Resource</th>
+        <th>Current Usage</th>
+        <th>Limit</th>
+      </tr>
+      <tr>
+        <td>{{resourceType}}</td>
+        <td>{{currentUsage}}</td>
+        <td>{{resourceLimit}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <p>To ensure uninterrupted service, please consider:</p>
+  <ul>
+    <li>Upgrading your plan</li>
+    <li>Optimizing resource usage</li>
+    <li>Reviewing inactive resources</li>
+  </ul>
+
+  {{> action-button text="Manage Resources" url=resourceManagementUrl}}
+</div>
+
+{{!-- tenant/security-policy-updated.hbs --}}
+<div class="security-update">
+  <h2>Security Policy Update</h2>
+  <p>The security policies for {{tenantName}} have been updated.</p>
+
+  {{#if passwordPolicyChanged}}
+    <div class="policy-section">
+      <h3>Password Policy Changes</h3>
+      <table>
+        <tr>
+          <th>Setting</th>
+          <th>Previous Value</th>
+          <th>New Value</th>
+        </tr>
+        {{#each passwordPolicyChanges}}
+          <tr>
+            <td>{{name}}</td>
+            <td>{{previousValue}}</td>
+            <td>{{newValue}}</td>
+          </tr>
+        {{/each}}
+      </table>
+    </div>
+  {{/if}}
+
+  {{#if mfaPolicyChanged}}
+    <div class="policy-section">
+      <h3>MFA Requirements</h3>
+      <p>{{mfaPolicyDescription}}</p>
+    </div>
+  {{/if}}
+
+  {{#if ipRestrictionChanged}}
+    <div class="alert alert-warning">
+      <h3>IP Access Restrictions Updated</h3>
+      <p>{{ipRestrictionDescription}}</p>
+    </div>
+  {{/if}}
+
+  <p>Changes will take effect on {{effectiveDate}}.</p>
+  {{> action-button text="Review Security Settings" url=securitySettingsUrl}}
+</div>
+```
+
+### Admin Notification Templates
+```handlebars
+{{!-- admin/security-breach.hbs --}}
+<div class="security-alert critical">
+  <h2>⚠️ Security Alert: Potential Breach Detected</h2>
+  
+  <div class="alert alert-warning">
+    <h3>Incident Details</h3>
+    <ul>
+      <li>Tenant: {{tenantName}}</li>
+      <li>Time Detected: {{detectionTime}}</li>
+      <li>Severity: {{severity}}</li>
+      <li>Type: {{incidentType}}</li>
+    </ul>
+  </div>
+
+  <div class="incident-details">
+    <h3>Detected Activities</h3>
+    <ul>
+      {{#each suspiciousActivities}}
+        <li>
+          <strong>{{timestamp}}</strong>: {{description}}
+          <br>
+          <small>IP: {{ipAddress}} | User: {{userName}}</small>
+        </li>
+      {{/each}}
+    </ul>
+  </div>
+
+  <div class="action-required">
+    <h3>Immediate Actions Required:</h3>
+    <ol>
+      {{#each requiredActions}}
+        <li>{{this}}</li>
+      {{/each}}
+    </ol>
+  </div>
+
+  {{> action-button text="View Security Dashboard" url=securityDashboardUrl}}
+</div>
+
+{{!-- admin/audit-summary.hbs --}}
+<div class="audit-summary">
+  <h2>Weekly Audit Summary</h2>
+  <p>Audit summary for {{tenantName}} from {{startDate}} to {{endDate}}</p>
+
+  <div class="summary-section">
+    <h3>Key Metrics</h3>
+    <table>
+      <tr>
+        <th>Metric</th>
+        <th>Count</th>
+        <th>Change</th>
+      </tr>
+      {{#each metrics}}
+        <tr>
+          <td>{{name}}</td>
+          <td>{{count}}</td>
+          <td>{{change}}</td>
+        </tr>
+      {{/each}}
+    </table>
+  </div>
+
+  <div class="summary-section">
+    <h3>Security Events</h3>
+    <ul>
+      {{#each securityEvents}}
+        <li class="event-{{severity}}">
+          {{description}}
+          <small>{{timestamp}}</small>
+        </li>
+      {{/each}}
+    </ul>
+  </div>
+
+  <div class="summary-section">
+    <h3>System Changes</h3>
+    <ul>
+      {{#each systemChanges}}
+        <li>
+          <strong>{{category}}</strong>: {{description}}
+          <br>
+          <small>By: {{user}} | {{timestamp}}</small>
+        </li>
+      {{/each}}
+    </ul>
+  </div>
+
+  {{> action-button text="View Full Audit Log" url=auditLogUrl}}
+</div>
+```
+
+### Notification Templates
+```handlebars
+{{!-- notifications/mention.hbs --}}
+<div class="notification">
+  <div class="mention-context">
+    <p><strong>{{mentionedBy}}</strong> mentioned you in {{contextType}}</p>
+    
+    <div class="content-preview">
+      <blockquote>
+        {{{contentPreview}}}
+      </blockquote>
+    </div>
+
+    {{#if thread}}
+      <div class="thread-context">
+        <small>In thread: {{thread.title}}</small>
+      </div>
+    {{/if}}
+  </div>
+
+  {{> action-button text="View Discussion" url=discussionUrl}}
+</div>
+
+{{!-- notifications/document-shared.hbs --}}
+<div class="notification">
+  <h2>Document Shared with You</h2>
+  
+  <div class="document-info">
+    <h3>{{documentName}}</h3>
+    <p>{{sharedBy}} has shared a document with you</p>
+    
+    <div class="document-details">
+      <ul>
+        <li>Type: {{documentType}}</li>
+        <li>Access Level: {{accessLevel}}</li>
+        {{#if expirationDate}}
+          <li>Access Expires: {{expirationDate}}</li>
+        {{/if}}
+      </ul>
+    </div>
+
+    {{#if message}}
+      <div class="share-message">
+        <p><strong>Message from {{sharedBy}}:</strong></p>
+        <blockquote>{{message}}</blockquote>
+      </div>
+    {{/if}}
+  </div>
+
+  {{> action-button text="View Document" url=documentUrl}}
+</div>
+```
+
+These templates provide a comprehensive set of communications for:
+- User security events (login alerts, MFA changes)
+- Role and permission changes
+- Tenant administrative updates
+- Security policy changes
+- Resource usage notifications
+- Security incident alerts
+- Audit summaries
+- Collaboration notifications
+
+Each template:
+- Uses consistent styling
+- Is responsive
+- Includes tracking capabilities
+- Follows email best practices
+- Uses modular components
+- Supports customization per tenant
+
+Would you like me to:
+1. Add more specific templates for other scenarios?
+2. Add localization support to the templates?
+3. Implement preview functionality for these templates?
+4. Add template testing capabilities?# Multi-tenant Node.js Application Implementation Plan
+
+## 1. System Architecture Overview
+
+### Core Components
+- **API Gateway**: Express.js application handling tenant routing and authentication
+- **Tenant Service**: Manages tenant lifecycle and configuration
+- **Auth Service**: Handles authentication and authorization
+- **User Service**: Manages user data and relationships
+- **Database Layer**: PostgreSQL with dynamic tenant database management
+- **Cache Layer**: Redis for performance optimization
+- **Event Bus**: For system-wide notifications and audit logging
+
+### Technology Stack
+- **Framework**: Express.js with TypeScript
+- **Database**: PostgreSQL (tenant databases)
+- **ORM**: Sequelize
+- **Cache & Rate Limiting**: Redis
+- **Authentication**: Passport.js, OAuth2, JSON Web Tokens
+- **Queue System**: Bull for background jobs
+- **Logging**: Winston + Elasticsearch
+- **Monitoring**: Prometheus + Grafana
+
+## 2. Core NPM Packages
+
+```json
+{
+  "dependencies": {
+    "express": "^4.18.2",
+    "sequelize": "^6.35.0",
+    "pg": "^8.11.0",
+    "pg-hstore": "^2.3.4",
+    "nodemailer": "^6.9.0",
+    "nodemailer-mailgun-transport": "^2.1.0",
+    "passport": "^0.6.0",
+    "passport-oauth2": "^1.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-2fa-totp": "^0.1.2",
+    "jsonwebtoken": "^9.0.0",
+    "bull": "^4.10.0",
+    "redis": "^4.6.0",
+    "winston": "^3.8.0",
+    "bcrypt": "^5.1.0",
+    "rate-limiter-flexible": "^2.4.0"
+  }
+}
+```
+
+## 3. Database Schema Design
+
+### Master Database Models (Tenant Registry)
+```typescript
+// models/tenant.ts
+import { Model, DataTypes, Sequelize } from 'sequelize';
+
+export class Tenant extends Model {
+  public id!: string;
+  public slug!: string;
+  public name!: string;
+  public status!: string;
+  public databaseName!: string;
+  public settings!: object;
+  public securityPolicies!: object;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+}
+
+export const initTenantModel = (sequelize: Sequelize) => {
+  Tenant.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    slug: {
+      type: DataTypes.STRING(50),
+      unique: true,
+      allowNull: false
+    },
+    name: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    status: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'active'
+    },
+    databaseName: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      unique: true
+    },
+    settings: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    },
+    securityPolicies: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    }
+  }, {
+    sequelize,
+    tableName: 'tenants',
+    indexes: [
+      { unique: true, fields: ['slug'] },
+      { unique: true, fields: ['databaseName'] }
+    ]
+  });
+};
+
+// models/user.ts
+export class User extends Model {
+  public id!: string;
+  public email!: string;
+  public hashedPassword!: string;
+  public twoFactorEnabled!: boolean;
+  public status!: string;
+  public profile!: object;
+}
+
+export const initUserModel = (sequelize: Sequelize) => {
+  User.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      unique: true,
+      allowNull: false
+    },
+    hashedPassword: {
+      type: DataTypes.STRING(255),
+      allowNull: false
+    },
+    twoFactorEnabled: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    status: {
+      type: DataTypes.STRING(20),
+      defaultValue: 'active'
+    },
+    profile: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    }
+  }, {
+    sequelize,
+    tableName: 'users'
+  });
+};
+
+// models/userTenant.ts
+export class UserTenant extends Model {
+  public userId!: string;
+  public tenantId!: string;
+  public roles!: string[];
+}
+
+export const initUserTenantModel = (sequelize: Sequelize) => {
+  UserTenant.init({
+    userId: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    tenantId: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+      references: {
+        model: 'tenants',
+        key: 'id'
+      }
+    },
+    roles: {
+      type: DataTypes.JSONB,
+      defaultValue: []
+    }
+  }, {
+    sequelize,
+    tableName: 'user_tenants'
+  });
+};
+```
+
+### Per-Tenant Database Models
+```typescript
+// models/tenant-specific/group.ts
+export class Group extends Model {
+  public id!: string;
+  public name!: string;
+  public parentId?: string;
+  public path!: string;
+}
+
+export const initGroupModel = (sequelize: Sequelize) => {
+  Group.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    name: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    parentId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'groups',
+        key: 'id'
+      }
+    },
+    path: {
+      type: DataTypes.STRING,
+      allowNull: false
+    }
+  }, {
+    sequelize,
+    tableName: 'groups',
+    indexes: [
+      { fields: ['parentId'] },
+      { fields: ['path'] }
+    ]
+  });
+};
+
+// models/tenant-specific/auditLog.ts
+export class AuditLog extends Model {
+  public id!: string;
+  public userId!: string;
+  public action!: string;
+  public resourceType!: string;
+  public resourceId!: string;
+  public metadata!: object;
+}
+
+export const initAuditLogModel = (sequelize: Sequelize) => {
+  AuditLog.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false
+    },
+    action: {
+      type: DataTypes.STRING(100),
+      allowNull: false
+    },
+    resourceType: {
+      type: DataTypes.STRING(50),
+      allowNull: false
+    },
+    resourceId: {
+      type: DataTypes.UUID,
+      allowNull: false
+    },
+    metadata: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
+    }
+  }, {
+    sequelize,
+    tableName: 'audit_logs',
+    indexes: [
+      { fields: ['userId'] },
+      { fields: ['resourceType', 'resourceId'] },
+      { fields: ['createdAt'] }
+    ]
+  });
+};
+```
+
+## 4. Database Connection Management
+
+### Sequelize Connection Manager
+```typescript
+class DatabaseManager {
+  private connections: Map<string, Sequelize> = new Map();
+  private readonly defaultConfig: Options;
+
+  constructor(config: Options) {
+    this.defaultConfig = {
+      ...config,
+      dialect: 'postgres',
+      logging: false,
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      }
+    };
+  }
+
+  async getTenantConnection(tenantId: string): Promise<Sequelize> {
+    if (this.connections.has(tenantId)) {
+      return this.connections.get(tenantId)!;
+    }
+
+    const tenant = await this.getTenantDetails(tenantId);
+    const connection = new Sequelize({
+      ...this.defaultConfig,
+      database: tenant.databaseName,
+      username: tenant.dbUser,
+      password: tenant.dbPassword
+    });
+
+    // Initialize tenant-specific models
+    initTenantModels(connection);
+
+    // Test connection
+    await connection.authenticate();
+
+    this.connections.set(tenantId, connection);
+    return connection;
+  }
+
+  async closeTenantConnection(tenantId: string): Promise<void> {
+    const connection = this.connections.get(tenantId);
+    if (connection) {
+      await connection.close();
+      this.connections.delete(tenantId);
+    }
+  }
+
+  private async getTenantDetails(tenantId: string): Promise<TenantDBConfig> {
+    // Fetch tenant database configuration from master database
+    const tenant = await Tenant.findByPk(tenantId, {
+      attributes: ['databaseName', 'dbUser', 'dbPassword']
+    });
+
+    if (!tenant) {
+      throw new Error(`Tenant ${tenantId} not found`);
+    }
+
+    return tenant;
+  }
+}
+```
+
+### Tenant Middleware with Sequelize
+```typescript
+export const tenantMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  const tenantSlug = req.headers['x-tenant'];
+  
+  if (!tenantSlug) {
+    return res.status(400).json({ error: 'Tenant header missing' });
+  }
+
+  try {
+    const tenant = await Tenant.findOne({
+      where: { slug: tenantSlug, status: 'active' }
+    });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    // Get tenant-specific database connection
+    req.tenantDb = await dbManager.getTenantConnection(tenant.id);
+    req.tenant = tenant;
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+```
+
+## 5. Tenant Management Implementation
+
+### Tenant Creation Service
+```typescript
+class TenantService {
+  async createTenant(data: CreateTenantDTO): Promise<Tenant> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Create tenant record
+      const tenant = await Tenant.create({
+        name: data.name,
+        slug: data.slug || this.generateSlug(data.name),
+        status: 'active',
+        settings: DEFAULT_SETTINGS,
+        securityPolicies: data.securityPolicies
+      }, { transaction });
+
+      // Create tenant database
+      await this.createTenantDatabase(tenant.databaseName);
+
+      // Run migrations
+      await this.runMigrations(tenant.databaseName);
+
+      // Create admin user
+      const admin = await User.create({
+        email: data.adminEmail,
+        hashedPassword: await bcrypt.hash(data.adminPassword, 12),
+        status: 'active'
+      }, { transaction });
+
+      // Link admin to tenant
+      await UserTenant.create({
+        userId: admin.id,
+        tenantId: tenant.id,
+        roles: ['admin']
+      }, { transaction });
+
+      await transaction.commit();
+      return tenant;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  private async createTenantDatabase(dbName: string): Promise<void> {
+    const rootConnection = new Sequelize(process.env.POSTGRES_URL!, {
+      logging: false
+    });
+
+    try {
+      await rootConnection.query(`CREATE DATABASE "${dbName}";`);
+    } finally {
+      await rootConnection.close();
+    }
+  }
+}
+```
+
+## 6. Email Service Implementation
+
+### Email Service Setup
+```typescript
+// services/email.service.ts
+import nodemailer from 'nodemailer';
+import mailgunTransport from 'nodemailer-mailgun-transport';
+
+export class EmailService {
+  private transporter: nodemailer.Transporter;
+  private readonly defaultFrom: string;
+
+  constructor() {
+    const auth = {
+      auth: {
+        api_key: process.env.MAILGUN_API_KEY!,
+        domain: process.env.MAILGUN_DOMAIN!
+      }
+    };
+
+    this.transporter = nodemailer.createTransport(mailgunTransport(auth));
+    this.defaultFrom = process.env.DEFAULT_FROM_EMAIL || 'noreply@yourdomain.com';
+  }
+
+  async sendEmail(options: {
+    to: string;
+    subject: string;
+    text?: string;
+    html?: string;
+    from?: string;
+    tenant?: string;
+  }): Promise<void> {
+    try {
+      const mailOptions = {
+        from: options.from || this.defaultFrom,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
+        'h:X-Tenant': options.tenant // Custom header for tenant tracking
+      };
+
+      await this.transporter.sendMail(mailOptions);
+    } catch (error) {
+      console.error('Email sending failed:', error);
+      throw new Error('Failed to send email');
+    }
+  }
+}
+
+### Email Templates Structure
+```
+src/
+  templates/
+    emails/
+      layouts/
+        base.hbs
+        marketing.hbs
+      partials/
+        header.hbs
+        footer.hbs
+        button.hbs
+      user/
+        invitation.hbs
+        password-reset.hbs
+        welcome.hbs
+      tenant/
+        created.hbs
+        suspended.hbs
+      notifications/
+        security-alert.hbs
+        payment-reminder.hbs
+```
+
+### Template Implementation
+```typescript
+// templates/emails/layouts/base.hbs
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{subject}}</title>
+  <style>
+    /* Common email styles */
+  </style>
+</head>
+<body>
+  {{> header }}
+  {{{body}}}
+  {{> footer tenant=tenant }}
+  {{#if trackingPixel}}
+    <img src="{{trackingPixel}}" alt="" width="1" height="1" />
+  {{/if}}
+</body>
+</html>
+
+// templates/emails/user/invitation.hbs
+<div class="invitation">
+  <h2>You've been invited to join {{tenantName}}</h2>
+  <p>{{inviterName}} has invited you to join their organization on our platform.</p>
+  {{> button text="Accept Invitation" url=inviteLink}}
+</div>
+
+// services/email-templates.service.ts
+import fs from 'fs/promises';
+import path from 'path';
+import handlebars from 'handlebars';
+import { minify } from 'html-minifier';
+
+export class EmailTemplateService {
+  private readonly templatesDir: string;
+  private readonly compiledTemplates: Map<string, HandlebarsTemplateDelegate>;
+  private readonly partialsRegistered: boolean = false;
+
+  constructor() {
+    this.templatesDir = path.join(process.cwd(), 'src/templates/emails');
+    this.compiledTemplates = new Map();
+  }
+
+  async initialize(): Promise<void> {
+    await this.registerPartials();
+    await this.precompileTemplates();
+  }
+
+  private async registerPartials(): Promise<void> {
+    if (this.partialsRegistered) return;
+
+    const partialsDir = path.join(this.templatesDir, 'partials');
+    const partials = await fs.readdir(partialsDir);
+
+    for (const partial of partials) {
+      const name = path.parse(partial).name;
+      const content = await fs.readFile(
+        path.join(partialsDir, partial),
+        'utf-8'
+      );
+      handlebars.registerPartial(name, content);
+    }
+
+    this.partialsRegistered = true;
+  }
+
+  private async precompileTemplates(): Promise<void> {
+    const templateDirs = ['user', 'tenant', 'notifications'];
+
+    for (const dir of templateDirs) {
+      const dirPath = path.join(this.templatesDir, dir);
+      const templates = await fs.readdir(dirPath);
+
+      for (const template of templates) {
+        const name = path.parse(template).name;
+        const content = await fs.readFile(
+          path.join(dirPath, template),
+          'utf-8'
+        );
+        this.compiledTemplates.set(
+          `${dir}/${name}`,
+          handlebars.compile(content)
+        );
+      }
+    }
+  }
+
+  async render(templateName: string, data: any): Promise<string> {
+    const template = this.compiledTemplates.get(templateName);
+    if (!template) {
+      throw new Error(`Template '${templateName}' not found`);
+    }
+
+    const layout = await fs.readFile(
+      path.join(this.templatesDir, 'layouts/base.hbs'),
+      'utf-8'
+    );
+    const layoutTemplate = handlebars.compile(layout);
+
+    const body = template(data);
+    const html = layoutTemplate({ ...data, body });
+
+    return minify(html, {
+      collapseWhitespace: true,
+      removeComments: true,
+      minifyCSS: true
+    });
+  }
+}
+
+### Email Queue Implementation
+```typescript
+// models/email-queue.ts
+export class EmailQueue extends Model {
+  public id!: string;
+  public to!: string;
+  public subject!: string;
+  public template!: string;
+  public templateData!: object;
+  public status!: 'pending' | 'processing' | 'sent' | 'failed';
+  public attempts!: number;
+  public error?: string;
+  public sentAt?: Date;
+  public trackingId?: string;
+}
+
+export const initEmailQueueModel = (sequelize: Sequelize) => {
+  EmailQueue.init({
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    to: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    subject: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    template: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    templateData: {
+      type: DataTypes.JSONB,
+      allowNull: false
+    },
+    status: {
+      type: DataTypes.ENUM('pending', 'processing', 'sent', 'failed'),
+      defaultValue: 'pending'
+    },
+    attempts: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    error: DataTypes.TEXT,
+    sentAt: DataTypes.DATE,
+    trackingId: DataTypes.UUID
+  }, {
+    sequelize,
+    tableName: 'email_queue'
+  });
+};
+
+// services/email-queue.service.ts
+import Bull from 'bull';
+import { v4 as uuidv4 } from 'uuid';
+
+export class EmailQueueService {
+  private queue: Bull.Queue;
+  
+  constructor(
+    private emailService: EmailService,
+    private emailTemplates: EmailTemplateService,
+    private analyticsService: EmailAnalyticsService
+  ) {
+    this.queue = new Bull('email-queue', {
+      redis: process.env.REDIS_URL,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000
+        }
+      }
+    });
+
+    this.setupQueueProcessor();
+  }
+
+  private setupQueueProcessor(): void {
+    this.queue.process(async (job) => {
+      const { id } = job.data;
+      
+      const email = await EmailQueue.findByPk(id);
+      if (!email) throw new Error('Email not found');
+
+      try {
+        await email.update({ status: 'processing' });
+
+        const trackingPixel = await this.analyticsService.generateTrackingPixel(
+          email.trackingId!
+        );
+
+        const html = await this.emailTemplates.render(
+          email.template,
+          {
+            ...email.templateData,
+            trackingPixel
+          }
+        );
+
+        await this.emailService.sendEmail({
+          to: email.to,
+          subject: email.subject,
+          html,
+          trackingId: email.trackingId
+        });
+
+        await email.update({
+          status: 'sent',
+          sentAt: new Date()
+        });
+
+      } catch (error) {
+        await email.update({
+          status: 'failed',
+          attempts: email.attempts + 1,
+          error: error.message
+        });
+
+        throw error;
+      }
+    });
+
+    // Handle failed jobs
+    this.queue.on('failed', async (job, error) => {
+      const { id } = job.data;
+      const email = await EmailQueue.findByPk(id);
+      
+      if (email && email.attempts >= 3) {
+        await this.analyticsService.logFailedEmail(email.trackingId!, error.message);
+      }
+    });
+  }
+
+  async queueEmail(params: {
+    to: string;
+    subject: string;
+    template: string;
+    templateData: object;
+    tenant?: string;
+  }): Promise<string> {
+    const trackingId = uuidv4();
+
+    const email = await EmailQueue.create({
+      to: params.to,
+      subject: params.subject,
+      template: params.template,
+      templateData: params.templateData,
+      trackingId
+    });
+
+    await this.queue.add({ id: email.id });
+    return trackingId;
+  }
+}
+
+### Email Analytics Implementation
+```typescript
+// models/email-analytics.ts
+export class EmailAnalytics extends Model {
+  public id!: string;
+  public trackingId!: string;
+  public emailId!: string;
+  public event!: 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed';
+  public timestamp!: Date;
+  public metadata!: object;
+}
+
+// services/email-analytics.service.ts
+export class EmailAnalyticsService {
+  constructor(private readonly redis: Redis) {}
+
+  async generateTrackingPixel(trackingId: string): Promise<string> {
+    return `${process.env.APP_URL}/email/track/${trackingId}.png`;
+  }
+
+  async trackOpen(trackingId: string, metadata: any): Promise<void> {
+    await EmailAnalytics.create({
+      trackingId,
+      event: 'opened',
+      timestamp: new Date(),
+      metadata
+    });
+
+    // Update real-time metrics
+    await this.redis.hincrby(
+      `email:metrics:${trackingId}`,
+      'opens',
+      1
+    );
+  }
+
+  async trackClick(trackingId: string, link: string, metadata: any): Promise<void> {
+    await EmailAnalytics.create({
+      trackingId,
+      event: 'clicked',
+      timestamp: new Date(),
+      metadata: { ...metadata, link }
+    });
+
+    // Update real-time metrics
+    await this.redis.hincrby(
+      `email:metrics:${trackingId}`,
+      'clicks',
+      1
+    );
+  }
+
+  async logFailedEmail(trackingId: string, error: string): Promise<void> {
+    await EmailAnalytics.create({
+      trackingId,
+      event: 'failed',
+      timestamp: new Date(),
+      metadata: { error }
+    });
+  }
+
+  async getEmailMetrics(trackingId: string): Promise<EmailMetrics> {
+    const [analytics, realTimeMetrics] = await Promise.all([
+      EmailAnalytics.findAll({
+        where: { trackingId },
+        order: [['timestamp', 'ASC']]
+      }),
+      this.redis.hgetall(`email:metrics:${trackingId}`)
+    ]);
+
+    return {
+      delivered: analytics.filter(a => a.event === 'delivered').length,
+      opened: parseInt(realTimeMetrics.opens || '0'),
+      clicked: parseInt(realTimeMetrics.clicks || '0'),
+      bounced: analytics.filter(a => a.event === 'bounced').length,
+      failed: analytics.filter(a => a.event === 'failed').length,
+      timeline: analytics.map(a => ({
+        event: a.event,
+        timestamp: a.timestamp,
+        metadata: a.metadata
+      }))
+    };
+  }
+}
+
+// controllers/email-tracking.controller.ts
+export class EmailTrackingController {
+  constructor(private analyticsService: EmailAnalyticsService) {}
+
+  async trackOpen(req: Request, res: Response): Promise<void> {
+    const { trackingId } = req.params;
+    
+    await this.analyticsService.trackOpen(trackingId, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+      timestamp: new Date()
+    });
+
+    // Redirect to the original URL
+    res.redirect(redirect as string);
+  }
+}
+
+### Email Analytics Dashboard Components
+```typescript
+// models/email-reports.ts
+interface EmailReport {
+  id: string;
+  periodStart: Date;
+  periodEnd: Date;
+  metrics: {
+    totalSent: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    bounced: number;
+    failed: number;
+  };
+  byTemplate: {
+    [templateName: string]: {
+      sent: number;
+      openRate: number;
+      clickRate: number;
+    };
+  };
+  byTenant?: {
+    [tenantId: string]: {
+      sent: number;
+      openRate: number;
+      clickRate: number;
+    };
+  };
+}
+
+// services/email-reporting.service.ts
+export class EmailReportingService {
+  async generateReport(params: {
+    startDate: Date;
+    endDate: Date;
+    tenantId?: string;
+  }): Promise<EmailReport> {
+    const { startDate, endDate, tenantId } = params;
+
+    // Base query conditions
+    const whereClause: any = {
+      createdAt: {
+        [Op.between]: [startDate, endDate]
+      }
+    };
+
+    if (tenantId) {
+      whereClause.tenantId = tenantId;
+    }
+
+    // Gather all metrics
+    const [emailStats, analyticsStats] = await Promise.all([
+      EmailQueue.findAll({
+        where: whereClause,
+        attributes: [
+          'template',
+          'status',
+          [fn('COUNT', col('*')), 'count']
+        ],
+        group: ['template', 'status']
+      }),
+      EmailAnalytics.findAll({
+        where: whereClause,
+        attributes: [
+          'event',
+          'trackingId',
+          [fn('COUNT', col('*')), 'count']
+        ],
+        group: ['event', 'trackingId']
+      })
+    ]);
+
+    // Process metrics by template
+    const byTemplate = emailStats.reduce((acc, stat) => {
+      const template = stat.getDataValue('template');
+      if (!acc[template]) {
+        acc[template] = {
+          sent: 0,
+          openRate: 0,
+          clickRate: 0
+        };
+      }
+
+      if (stat.getDataValue('status') === 'sent') {
+        acc[template].sent += parseInt(stat.getDataValue('count'));
+      }
+
+      return acc;
+    }, {} as Record<string, any>);
+
+    // Calculate open and click rates
+    for (const stat of analyticsStats) {
+      const template = await this.getTemplateFromTrackingId(stat.trackingId);
+      if (template && byTemplate[template]) {
+        if (stat.event === 'opened') {
+          byTemplate[template].openRate = (
+            (parseInt(stat.getDataValue('count')) / byTemplate[template].sent) * 100
+          ).toFixed(2);
+        }
+        if (stat.event === 'clicked') {
+          byTemplate[template].clickRate = (
+            (parseInt(stat.getDataValue('count')) / byTemplate[template].sent) * 100
+          ).toFixed(2);
+        }
+      }
+    }
+
+    // Generate full report
+    return {
+      id: uuidv4(),
+      periodStart: startDate,
+      periodEnd: endDate,
+      metrics: {
+        totalSent: emailStats
+          .filter(s => s.getDataValue('status') === 'sent')
+          .reduce((sum, s) => sum + parseInt(s.getDataValue('count')), 0),
+        delivered: emailStats
+          .filter(s => s.getDataValue('status') === 'sent')
+          .reduce((sum, s) => sum + parseInt(s.getDataValue('count')), 0),
+        opened: analyticsStats
+          .filter(s => s.event === 'opened')
+          .reduce((sum, s) => sum + parseInt(s.getDataValue('count')), 0),
+        clicked: analyticsStats
+          .filter(s => s.event === 'clicked')
+          .reduce((sum, s) => sum + parseInt(s.getDataValue('count')), 0),
+        bounced: emailStats
+          .filter(s => s.getDataValue('status') === 'failed' && s.error?.includes('bounce'))
+          .reduce((sum, s) => sum + parseInt(s.getDataValue('count')), 0),
+        failed: emailStats
+          .filter(s => s.getDataValue('status') === 'failed')
+          .reduce((sum, s) => sum + parseInt(s.getDataValue('count')), 0),
+      },
+      byTemplate
+    };
+  }
+
+  private async getTemplateFromTrackingId(trackingId: string): Promise<string | null> {
+    const email = await EmailQueue.findOne({
+      where: { trackingId },
+      attributes: ['template']
+    });
+    return email?.template || null;
+  }
+}
+
+### Email Bounce Handling
+```typescript
+// services/email-bounce.service.ts
+export class EmailBounceService {
+  constructor(private analyticsService: EmailAnalyticsService) {}
+
+  async handleBounce(bounceData: {
+    trackingId: string;
+    email: string;
+    reason: string;
+    timestamp: Date;
+  }): Promise<void> {
+    // Log bounce event
+    await EmailAnalytics.create({
+      trackingId: bounceData.trackingId,
+      event: 'bounced',
+      timestamp: bounceData.timestamp,
+      metadata: {
+        email: bounceData.email,
+        reason: bounceData.reason
+      }
+    });
+
+    // Update email status
+    await EmailQueue.update(
+      { 
+        status: 'failed',
+        error: `Bounced: ${bounceData.reason}`
+      },
+      { 
+        where: { trackingId: bounceData.trackingId }
+      }
+    );
+
+    // Mark email as problematic in user profile if it's a hard bounce
+    if (this.isHardBounce(bounceData.reason)) {
+      await this.markEmailAsProblematic(bounceData.email);
+    }
+  }
+
+  private isHardBounce(reason: string): boolean {
+    const hardBounceReasons = [
+      'invalid-recipient',
+      'unknown-user',
+      'rejected-recipient',
+      'non-existent-domain'
+    ];
+    return hardBounceReasons.some(r => reason.includes(r));
+  }
+
+  private async markEmailAsProblematic(email: string): Promise<void> {
+    await User.update(
+      {
+        emailStatus: 'bounced',
+        emailStatusUpdatedAt: new Date()
+      },
+      {
+        where: { email }
+      }
+    );
+  }
+}
+
+### API Routes for Email Analytics
+```typescript
+// routes/email-analytics.routes.ts
+import express from 'express';
+import { EmailTrackingController } from '../controllers/email-tracking.controller';
+import { EmailReportingController } from '../controllers/email-reporting.controller';
+
+const router = express.Router();
+const trackingController = new EmailTrackingController();
+const reportingController = new EmailReportingController();
+
+// Tracking endpoints
+router.get('/track/open/:trackingId.png', trackingController.trackOpen);
+router.get('/track/click/:trackingId', trackingController.trackClick);
+
+// Analytics endpoints
+router.get('/reports/overview', reportingController.getOverview);
+router.get('/reports/by-template', reportingController.getTemplateStats);
+router.get('/reports/by-tenant', reportingController.getTenantStats);
+router.get('/reports/export', reportingController.exportReport);
+
+// Webhook for bounce handling
+router.post('/webhooks/mailgun', async (req, res) => {
+  const bounceService = new EmailBounceService();
+  await bounceService.handleBounce(req.body);
+  res.sendStatus(200);
+});
+
+export default router;
+
+### Environment Configuration
+```env
+# Mailgun Configuration
+MAILGUN_API_KEY=your-mailgun-api-key
+MAILGUN_DOMAIN=your-mailgun-domain
+MAILGUN_WEBHOOK_SIGNING_KEY=your-webhook-signing-key
+
+# Email Configuration
+DEFAULT_FROM_EMAIL=noreply@yourdomain.com
+EMAIL_TRACKING_DOMAIN=track.yourdomain.com
+
+# Redis Configuration for Email Queue
+REDIS_URL=redis://localhost:6379
+EMAIL_QUEUE_PREFIX=email_queue
+
+# Analytics Storage
+ANALYTICS_RETENTION_DAYS=90
+```
+
+This completes the email service implementation with:
+- File-based templates using Handlebars
+- Reliable email queue with Bull
+- Comprehensive email tracking and analytics
+- Bounce handling and reporting
+- API endpoints for analytics and tracking
+- Environment configuration
+
+The system now provides a robust email delivery service with monitoring and analytics capabilities.
+
+    // Return a 1x1 transparent pixel
+    res.writeHead(200, {
+      'Content-Type': 'image/png',
+      'Content-Length': '67'
+    });
+    res.end(Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
+    ));
+  }
+
+  async trackClick(req: Request, res: Response): Promise<void> {
+    const { trackingId } = req.params;
+    const { redirect } = req.query;
+
+    await this.analyticsService.trackClick(trackingId, redirect as string, {
+      userAgent: req.headers['user-agent'],
+      ip: req.ip,
+
+### Integration with User Management
+```typescript
+class UserInvitationService {
+  constructor(
+    private emailService: EmailService,
+    private emailTemplates: EmailTemplateService
+  ) {}
+
+  async inviteUser(params: {
+    email: string;
+    tenantId: string;
+    inviterId: string;
+    roles: string[];
+  }): Promise<void> {
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Create invitation record
+      const invitation = await UserInvitation.create({
+        email: params.email,
+        tenantId: params.tenantId,
+        inviterId: params.inviterId,
+        token: crypto.randomBytes(32).toString('hex'),
+        roles: params.roles,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+      }, { transaction });
+
+      // Get tenant and inviter details
+      const [tenant, inviter] = await Promise.all([
+        Tenant.findByPk(params.tenantId),
+        User.findByPk(params.inviterId)
+      ]);
+
+      // Generate invitation link
+      const inviteLink = `${process.env.APP_URL}/accept-invite/${invitation.token}`;
+
+      // Send invitation email
+      await this.emailService.sendEmail({
+        to: params.email,
+        subject: `Invitation to join ${tenant.name}`,
+        html: this.emailTemplates.getTemplate('userInvitation', {
+          inviteLink,
+          tenantName: tenant.name,
+          inviterName: inviter.profile.name || inviter.email
+        }),
+        tenant: tenant.slug
+      });
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+}
+
+### Password Reset Implementation
+```typescript
+class PasswordResetService {
+  constructor(
+    private emailService: EmailService,
+    private emailTemplates: EmailTemplateService
+  ) {}
+
+  async initiatePasswordReset(email: string): Promise<void> {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      // Don't reveal user existence, just return
+      return;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await PasswordResetToken.create({
+      userId: user.id,
+      token,
+      expiresAt
+    });
+
+    const resetLink = `${process.env.APP_URL}/reset-password/${token}`;
+
+    await this.emailService.sendEmail({
+      to: email,
+      subject: 'Password Reset Request',
+      html: this.emailTemplates.getTemplate('passwordReset', {
+        resetLink,
+        userName: user.profile.name || user.email
+      })
+    });
+  }
+
+  async completePasswordReset(token: string, newPassword: string): Promise<void> {
+    const resetToken = await PasswordResetToken.findOne({
+      where: {
+        token,
+        expiresAt: { [Op.gt]: new Date() },
+        used: false
+      }
+    });
+
+    if (!resetToken) {
+      throw new Error('Invalid or expired reset token');
+    }
+
+    const transaction = await sequelize.transaction();
+
+    try {
+      // Update password
+      await User.update({
+        hashedPassword: await bcrypt.hash(newPassword, 12)
+      }, {
+        where: { id: resetToken.userId },
+        transaction
+      });
+
+      // Mark token as used
+      await resetToken.update({ used: true }, { transaction });
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+}
+
+[Continued in next sections...]
