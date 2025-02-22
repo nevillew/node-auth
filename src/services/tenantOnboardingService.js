@@ -35,15 +35,6 @@ class TenantOnboardingService {
       { 
         onboardingStatus: 'in_progress',
         securityPolicy: {
-          password: {
-            minLength: 8,
-            requireUppercase: true,
-            requireLowercase: true,
-            requireNumbers: true,
-            requireSpecialChars: true,
-            preventPasswordReuse: 3,
-            expiryDays: 90
-          },
           session: {
             maxConcurrentSessions: 3,
             sessionTimeout: 3600,

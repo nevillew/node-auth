@@ -22,60 +22,6 @@ module.exports = (sequelize, DataTypes) => {
       unique: true,
       allowNull: false
     },
-    password: {
-      type: DataTypes.STRING,
-      validate: {
-        isStrongPassword(value) {
-          // Get tenant's password policy
-          const policy = this.tenant?.securityPolicy?.password || {
-            minLength: 8,
-            requireUppercase: true,
-            requireLowercase: true,
-            requireNumbers: true,
-            requireSpecialChars: true
-          };
-
-          // Build regex pattern based on policy
-          let pattern = '^';
-          if (policy.requireLowercase) pattern += '(?=.*[a-z])';
-          if (policy.requireUppercase) pattern += '(?=.*[A-Z])';
-          if (policy.requireNumbers) pattern += '(?=.*\\d)';
-          if (policy.requireSpecialChars) pattern += '(?=.*[@$!%*?&])';
-          pattern += `.{${policy.minLength},}$`;
-
-          if (!new RegExp(pattern).test(value)) {
-            throw new Error('Password must meet the security requirements');
-          }
-        }
-      }
-    },
-    passwordHistory: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
-      defaultValue: [],
-      validate: {
-        checkReuse(value) {
-          const policy = this.tenant?.securityPolicy?.password || {};
-          if (policy.preventPasswordReuse && value.includes(this.password)) {
-            throw new Error(`Cannot reuse previous ${policy.preventPasswordReuse} passwords`);
-          }
-        }
-      }
-    },
-    passwordChangedAt: {
-      type: DataTypes.DATE,
-      validate: {
-        checkExpiry(value) {
-          const policy = this.tenant?.securityPolicy?.password || {};
-          if (policy.expiryDays && value) {
-            const expiryDate = new Date(value);
-            expiryDate.setDate(expiryDate.getDate() + policy.expiryDays);
-            if (new Date() > expiryDate) {
-              throw new Error('Password has expired');
-            }
-          }
-        }
-      }
-    },
     failedLoginAttempts: {
       type: DataTypes.INTEGER,
       defaultValue: 0
