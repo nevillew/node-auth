@@ -188,16 +188,73 @@ class TenantController {
 
   // Delete tenant
   async delete(req, res) {
+    const t = await sequelize.transaction();
     try {
-      const tenant = await Tenant.findByPk(req.params.id);
+      const { confirm = false } = req.body;
+      const tenant = await Tenant.findByPk(req.params.id, { transaction: t });
       
       if (!tenant) {
+        await t.rollback();
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      await tenant.destroy();
+      // Require confirmation
+      if (!confirm) {
+        await t.rollback();
+        return res.status(202).json({
+          message: 'Confirmation required',
+          tenant: {
+            id: tenant.id,
+            name: tenant.name,
+            userCount: await TenantUser.count({ where: { tenantId: tenant.id } })
+          }
+        });
+      }
+
+      // Get all tenant users for notification
+      const tenantUsers = await TenantUser.findAll({
+        where: { tenantId: tenant.id },
+        include: [User],
+        transaction: t
+      });
+
+      // Delete tenant database
+      await manager.deleteTenantDatabase(tenant.slug);
+
+      // Delete tenant record
+      await tenant.destroy({ transaction: t });
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'TENANT_DELETED',
+        details: {
+          tenantId: tenant.id,
+          name: tenant.name,
+          deletedBy: req.user.id
+        },
+        severity: 'critical'
+      }, { transaction: t });
+
+      // Notify all tenant users
+      await Promise.all(tenantUsers.map(user => 
+        notificationService.sendEmail({
+          to: user.email,
+          subject: `Tenant ${tenant.name} has been deleted`,
+          template: 'tenant-deleted',
+          context: {
+            name: user.name,
+            tenantName: tenant.name,
+            deletedBy: req.user.name,
+            date: new Date().toLocaleDateString()
+          }
+        })
+      ));
+
+      await t.commit();
       res.status(204).send();
     } catch (error) {
+      await t.rollback();
       res.status(400).json({ error: error.message });
     }
   }

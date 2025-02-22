@@ -194,6 +194,32 @@ class DatabaseManager {
       await client.end();
     }
   }
+
+  async deleteTenantDatabase(tenantSlug) {
+    const client = new Client({
+      user: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT
+    });
+
+    try {
+      await client.connect();
+      
+      // Disconnect all active connections
+      await client.query(`
+        SELECT pg_terminate_backend(pg_stat_activity.pid)
+        FROM pg_stat_activity
+        WHERE pg_stat_activity.datname = $1
+          AND pid <> pg_backend_pid();
+      `, [tenantSlug]);
+
+      // Drop database
+      await client.query(`DROP DATABASE "${tenantSlug}"`);
+    } finally {
+      await client.end();
+    }
+  }
 }
 
 module.exports.manager = new DatabaseManager();
