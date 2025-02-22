@@ -48,6 +48,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },
+    passkeyRegistrationStartedAt: DataTypes.DATE,
     name: DataTypes.STRING,
     avatar: DataTypes.STRING,
     googleId: {
