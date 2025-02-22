@@ -281,6 +281,66 @@ router.post('/token', tokenHandler, (req, res) => {
   res.json(res.locals.oauth.token);
 });
 
+// Machine to machine token generation
+router.post('/m2m/token', authenticateHandler, async (req, res) => {
+  try {
+    const { clientId, scopes } = req.body;
+
+    // Verify client exists and is authorized for M2M
+    const client = await OAuthClient.findOne({ 
+      where: { 
+        clientId,
+        type: 'machine'
+      }
+    });
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found or not authorized for M2M' });
+    }
+
+    // Verify requested scopes are allowed for this client
+    const allowedScopes = new Set(client.allowedScopes);
+    const requestedScopes = new Set(scopes);
+    const invalidScopes = [...requestedScopes].filter(s => !allowedScopes.has(s));
+
+    if (invalidScopes.length > 0) {
+      return res.status(403).json({ 
+        error: 'Invalid scopes requested',
+        invalidScopes 
+      });
+    }
+
+    // Generate token with limited lifetime
+    const token = await oauth2Server.generateToken({
+      client,
+      scope: scopes.join(' '),
+      type: 'm2m',
+      expiresIn: 3600 // 1 hour
+    });
+
+    // Create audit log
+    await SecurityAuditLog.create({
+      userId: req.user.id,
+      event: 'M2M_TOKEN_GENERATED',
+      details: {
+        clientId: client.id,
+        scopes,
+        expiresAt: token.accessTokenExpiresAt
+      },
+      severity: 'medium'
+    });
+
+    res.json({
+      access_token: token.accessToken,
+      expires_in: 3600,
+      scope: scopes.join(' '),
+      token_type: 'Bearer'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/refresh', tokenHandler, (req, res) => {
   res.json(res.locals.oauth.token);
 });
