@@ -10,7 +10,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "migrate": "sequelize-cli db:migrate",
-    "seed": "sequelize-cli db:seed:all"
+    "seed": "sequelize-cli db:seed:all",
+    "build:sdk": "cd sdk && npm run build",
+    "test:sdk": "cd sdk && npm test"
   },
   "dependencies": {
     "bcrypt": "^5.x",
@@ -40,7 +42,8 @@
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^4.7.1",
-    "zod": "^3.x"
+    "zod": "^3.x",
+    "@your-org/multitenant-sdk": "file:sdk"
   },
   "devDependencies": {
     "@types/jest": "^29.x",
@@ -51,6 +54,10 @@
     "jest-environment-node": "^29.x",
     "nodemon": "^3.x",
     "sequelize-cli": "^6.6.2",
-    "supertest": "^6.x"
+    "supertest": "^6.x",
+    "typescript": "^5.2.2",
+    "tsup": "^7.2.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0"
   }
 }
