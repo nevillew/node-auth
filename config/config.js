@@ -2,24 +2,24 @@ require('dotenv').config();
 
 module.exports = {
   development: {
-    username: "postgres",
-    password: "postgres",
+    username: process.env.USER,
+    password: null,
     database: "multitenant_dev",
     host: "127.0.0.1",
     port: 5432,
     dialect: "postgres"
   },
   test: {
-    username: "postgres",
-    password: "postgres",
+    username: process.env.USER,
+    password: null,
     database: "multitenant_test",
     host: "127.0.0.1",
     port: 5432,
     dialect: "postgres"
   },
   production: {
-    username: "postgres",
-    password: "postgres",
+    username: process.env.USER,
+    password: null,
     database: "multitenant_prod",
     host: "127.0.0.1",
     port: 5432,
