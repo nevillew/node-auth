@@ -106,10 +106,29 @@ module.exports = (sequelize, DataTypes) => {
         newsletter: false
       }
     },
-    isActive: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true
+    status: {
+      type: DataTypes.ENUM('active', 'inactive', 'suspended'),
+      defaultValue: 'active'
     },
+    statusReason: DataTypes.STRING,
+    statusChangedAt: DataTypes.DATE,
+    statusChangedBy: {
+      type: DataTypes.UUID,
+      references: {
+        model: 'Users',
+        key: 'id'
+      }
+    },
+    deactivatedAt: DataTypes.DATE,
+    deactivatedBy: {
+      type: DataTypes.UUID,
+      references: {
+        model: 'Users',
+        key: 'id'
+      }
+    },
+    deactivationReason: DataTypes.STRING,
+    lastLoginAt: DataTypes.DATE,
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE
   }, {

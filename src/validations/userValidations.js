@@ -29,8 +29,53 @@ const changePasswordSchema = Joi.object({
     })
 });
 
+const searchUserSchema = Joi.object({
+  query: Joi.string().allow(''),
+  status: Joi.string().valid('active', 'inactive', 'suspended'),
+  role: Joi.string(),
+  tenant: Joi.string().uuid(),
+  lastLoginStart: Joi.date().iso(),
+  lastLoginEnd: Joi.date().iso().min(Joi.ref('lastLoginStart')),
+  page: Joi.number().integer().min(1),
+  limit: Joi.number().integer().min(1).max(100),
+  sortBy: Joi.string().valid('createdAt', 'email', 'name', 'lastLoginAt'),
+  sortOrder: Joi.string().valid('ASC', 'DESC')
+});
+
+const bulkUpdateSchema = Joi.object({
+  userIds: Joi.array().items(Joi.string().uuid()).min(1).required(),
+  updates: Joi.object({
+    status: Joi.string().valid('active', 'inactive', 'suspended'),
+    roleIds: Joi.array().items(Joi.string().uuid()),
+    permissionIds: Joi.array().items(Joi.string().uuid())
+  }).required()
+});
+
+const statusUpdateSchema = Joi.object({
+  status: Joi.string().valid('active', 'inactive', 'suspended').required(),
+  reason: Joi.string().max(500)
+});
+
+const roleAssignmentSchema = Joi.object({
+  roles: Joi.array().items(Joi.string().uuid()).min(1).required()
+});
+
+const permissionUpdateSchema = Joi.object({
+  permissions: Joi.array().items(Joi.string().uuid()).min(1).required()
+});
+
+const deactivateSchema = Joi.object({
+  reason: Joi.string().max(500).required()
+});
+
 module.exports = {
   createUserSchema,
   updateUserSchema,
-  changePasswordSchema
+  changePasswordSchema,
+  searchUserSchema,
+  bulkUpdateSchema,
+  statusUpdateSchema,
+  roleAssignmentSchema,
+  permissionUpdateSchema,
+  deactivateSchema
 };

@@ -12,8 +12,260 @@ class UserController {
   static validations = {
     create: validate(createUserSchema),
     update: validate(updateUserSchema),
-    changePassword: validate(changePasswordSchema)
+    changePassword: validate(changePasswordSchema),
+    search: validate(searchUserSchema),
+    bulkUpdate: validate(bulkUpdateSchema)
   };
+
+  // Search users with filtering
+  async search(req, res) {
+    try {
+      const { 
+        query, 
+        status, 
+        role, 
+        tenant,
+        lastLoginStart,
+        lastLoginEnd,
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        sortOrder = 'DESC'
+      } = req.query;
+
+      const where = {};
+      
+      if (query) {
+        where[Op.or] = [
+          { email: { [Op.iLike]: `%${query}%` } },
+          { name: { [Op.iLike]: `%${query}%` } }
+        ];
+      }
+      
+      if (status) where.status = status;
+      if (tenant) where.tenantId = tenant;
+      
+      if (lastLoginStart || lastLoginEnd) {
+        where.lastLoginAt = {};
+        if (lastLoginStart) where.lastLoginAt[Op.gte] = new Date(lastLoginStart);
+        if (lastLoginEnd) where.lastLoginAt[Op.lte] = new Date(lastLoginEnd);
+      }
+
+      const users = await User.findAndCountAll({
+        where,
+        include: [{
+          model: Role,
+          where: role ? { name: role } : undefined,
+          required: !!role
+        }],
+        order: [[sortBy, sortOrder]],
+        limit,
+        offset: (page - 1) * limit,
+        attributes: { exclude: ['password'] }
+      });
+
+      res.json({
+        users: users.rows,
+        total: users.count,
+        page,
+        totalPages: Math.ceil(users.count / limit)
+      });
+    } catch (error) {
+      next(new AppError(error.message, 400));
+    }
+  }
+
+  // Bulk operations
+  async bulkUpdate(req, res) {
+    const { userIds, updates } = req.body;
+    const t = await sequelize.transaction();
+
+    try {
+      const users = await User.update(updates, {
+        where: { id: userIds },
+        transaction: t
+      });
+
+      await ActivityLog.bulkCreate(userIds.map(userId => ({
+        userId,
+        action: 'BULK_UPDATE',
+        details: updates
+      })), { transaction: t });
+
+      await t.commit();
+      res.json({ updated: users[0] });
+    } catch (error) {
+      await t.rollback();
+      next(new AppError(error.message, 400));
+    }
+  }
+
+  // Status management
+  async updateStatus(req, res) {
+    const { userId } = req.params;
+    const { status, reason } = req.body;
+
+    try {
+      const user = await User.findByPk(userId);
+      if (!user) throw new AppError('User not found', 404);
+
+      await user.update({ 
+        status,
+        statusReason: reason,
+        statusChangedAt: new Date(),
+        statusChangedBy: req.user.id
+      });
+
+      await ActivityLog.create({
+        userId,
+        action: 'STATUS_CHANGE',
+        details: { status, reason }
+      });
+
+      res.json(user);
+    } catch (error) {
+      next(new AppError(error.message, 400));
+    }
+  }
+
+  // Role assignment
+  async assignRoles(req, res) {
+    const { userId } = req.params;
+    const { roles } = req.body;
+    const t = await sequelize.transaction();
+
+    try {
+      const user = await User.findByPk(userId);
+      if (!user) throw new AppError('User not found', 404);
+
+      await UserRole.destroy({ 
+        where: { userId },
+        transaction: t
+      });
+
+      await UserRole.bulkCreate(
+        roles.map(roleId => ({ userId, roleId })),
+        { transaction: t }
+      );
+
+      await ActivityLog.create({
+        userId,
+        action: 'ROLE_ASSIGNMENT',
+        details: { roles }
+      }, { transaction: t });
+
+      await t.commit();
+      res.json({ message: 'Roles updated successfully' });
+    } catch (error) {
+      await t.rollback();
+      next(new AppError(error.message, 400));
+    }
+  }
+
+  // Permission management
+  async updatePermissions(req, res) {
+    const { userId } = req.params;
+    const { permissions } = req.body;
+    const t = await sequelize.transaction();
+
+    try {
+      const user = await User.findByPk(userId);
+      if (!user) throw new AppError('User not found', 404);
+
+      await UserPermission.destroy({ 
+        where: { userId },
+        transaction: t
+      });
+
+      await UserPermission.bulkCreate(
+        permissions.map(permissionId => ({ userId, permissionId })),
+        { transaction: t }
+      );
+
+      await ActivityLog.create({
+        userId,
+        action: 'PERMISSION_UPDATE',
+        details: { permissions }
+      }, { transaction: t });
+
+      await t.commit();
+      res.json({ message: 'Permissions updated successfully' });
+    } catch (error) {
+      await t.rollback();
+      next(new AppError(error.message, 400));
+    }
+  }
+
+  // Activity monitoring
+  async getActivity(req, res) {
+    const { userId } = req.params;
+    const { startDate, endDate, type, page = 1, limit = 20 } = req.query;
+
+    try {
+      const where = { userId };
+      
+      if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) where.createdAt[Op.gte] = new Date(startDate);
+        if (endDate) where.createdAt[Op.lte] = new Date(endDate);
+      }
+      
+      if (type) where.action = type;
+
+      const logs = await ActivityLog.findAndCountAll({
+        where,
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset: (page - 1) * limit
+      });
+
+      res.json({
+        logs: logs.rows,
+        total: logs.count,
+        page,
+        totalPages: Math.ceil(logs.count / limit)
+      });
+    } catch (error) {
+      next(new AppError(error.message, 400));
+    }
+  }
+
+  // Account deactivation
+  async deactivate(req, res) {
+    const { userId } = req.params;
+    const { reason } = req.body;
+    const t = await sequelize.transaction();
+
+    try {
+      const user = await User.findByPk(userId);
+      if (!user) throw new AppError('User not found', 404);
+
+      await user.update({
+        status: 'inactive',
+        deactivatedAt: new Date(),
+        deactivatedBy: req.user.id,
+        deactivationReason: reason
+      }, { transaction: t });
+
+      // Revoke all sessions
+      await OAuthToken.destroy({
+        where: { userId },
+        transaction: t
+      });
+
+      await ActivityLog.create({
+        userId,
+        action: 'ACCOUNT_DEACTIVATED',
+        details: { reason }
+      }, { transaction: t });
+
+      await t.commit();
+      res.json({ message: 'Account deactivated successfully' });
+    } catch (error) {
+      await t.rollback();
+      next(new AppError(error.message, 400));
+    }
+  }
   // Create a new user
   async create(req, res) {
     try {

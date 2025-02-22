@@ -9,6 +9,25 @@ router.get('/:id', authenticateHandler, userController.get);
 router.put('/:id', authenticateHandler, userController.update);
 router.delete('/:id', authenticateHandler, userController.delete);
 
+// User search and filtering
+router.get('/search', authenticateHandler, userController.search);
+
+// Bulk operations
+router.post('/bulk/update', authenticateHandler, userController.bulkUpdate);
+
+// Status management
+router.put('/:id/status', authenticateHandler, userController.updateStatus);
+
+// Role and permission management
+router.put('/:id/roles', authenticateHandler, userController.assignRoles);
+router.put('/:id/permissions', authenticateHandler, userController.updatePermissions);
+
+// Activity monitoring
+router.get('/:id/activity', authenticateHandler, userController.getActivity);
+
+// Account deactivation
+router.post('/:id/deactivate', authenticateHandler, userController.deactivate);
+
 // Profile management
 router.get('/:id/profile', authenticateHandler, userController.getProfile);
 router.put('/:id/profile', authenticateHandler, userController.updateProfile);
