@@ -270,24 +270,80 @@ class UserController {
   }
   // Create a new user
   async create(req, res) {
+    const t = await sequelize.transaction();
     try {
       const { email, password, name, avatar } = req.body;
       
+      // Check if user already exists
+      const existingUser = await User.findOne({ 
+        where: { email },
+        transaction: t 
+      });
+      
+      if (existingUser) {
+        await t.rollback();
+        return res.status(409).json({ error: 'User already exists' });
+      }
+
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
       
+      // Create user
       const user = await User.create({
         email,
         password: hashedPassword,
         name,
-        avatar
-      });
+        avatar,
+        profile: {
+          timezone: 'UTC',
+          language: 'en'
+        },
+        preferences: {
+          theme: 'light',
+          notifications: {
+            email: true,
+            push: true,
+            sms: false
+          }
+        }
+      }, { transaction: t });
 
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await user.update({
+        verificationToken,
+        verificationTokenExpires: verificationExpires
+      }, { transaction: t });
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: user.id,
+        event: 'USER_CREATED',
+        details: {
+          createdBy: req.user?.id || 'system',
+          method: 'manual'
+        },
+        severity: 'medium'
+      }, { transaction: t });
+
+      // Send verification email
+      const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+      await emailService.sendVerificationEmail(
+        user.email,
+        user.name,
+        verificationUrl
+      );
+
+      await t.commit();
+      
       res.status(201).json({
         id: user.id,
         email: user.email,
         name: user.name,
-        avatar: user.avatar
+        avatar: user.avatar,
+        status: user.status
       });
     } catch (error) {
       res.status(400).json({ error: error.message });
