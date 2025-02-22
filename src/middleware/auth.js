@@ -7,6 +7,15 @@ const authenticateHandler = async (req, res, next) => {
     const response = new OAuth2Server.Response(res);
 
     const token = await oauth2Server.authenticate(request, response);
+    
+    // Check if token is revoked
+    const tokenRecord = await OAuthToken.findOne({
+      where: { accessToken: token.accessToken }
+    });
+    
+    if (tokenRecord?.revoked) {
+      throw new Error('Token has been revoked');
+    }
     req.user = token.user;
     req.token = token;
 
@@ -80,6 +89,17 @@ const tokenHandler = async (req, res, next) => {
   try {
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
+
+    // Check if token is revoked
+    if (request.body.grant_type === 'refresh_token') {
+      const oldToken = await OAuthToken.findOne({
+        where: { refreshToken: request.body.refresh_token }
+      });
+      
+      if (oldToken?.revoked) {
+        throw new Error('Token has been revoked');
+      }
+    }
 
     // Generate new token
     const token = await oauth2Server.token(request, response);

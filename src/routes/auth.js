@@ -177,6 +177,29 @@ router.post('/refresh', tokenHandler, (req, res) => {
   res.json(res.locals.oauth.token);
 });
 
+// Logout endpoint
+router.post('/logout', authenticateHandler, async (req, res) => {
+  try {
+    // Revoke current token
+    await OAuthToken.update(
+      { revoked: true },
+      { where: { accessToken: req.token.accessToken } }
+    );
+
+    // Optionally revoke all user tokens
+    if (req.body.allDevices) {
+      await OAuthToken.update(
+        { revoked: true },
+        { where: { userId: req.user.id } }
+      );
+    }
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 2FA setup
 router.post('/2fa/setup', authenticateHandler, async (req, res) => {
   const user = await User.findByPk(req.user.id);
