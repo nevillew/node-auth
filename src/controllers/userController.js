@@ -206,6 +206,38 @@ class UserController {
   }
 
   // Activity monitoring
+  async getAuditHistory(req, res) {
+    try {
+      const { 
+        startDate, 
+        endDate, 
+        severity,
+        event,
+        page,
+        limit,
+        sortOrder 
+      } = req.query;
+
+      const auditHistory = await securityAuditService.getUserAuditHistory(
+        req.params.id,
+        {
+          startDate,
+          endDate,
+          severity,
+          event,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          sortOrder
+        }
+      );
+
+      res.json(auditHistory);
+    } catch (error) {
+      logger.error('Audit history retrieval failed:', error);
+      next(new AppError(error.message, 400));
+    }
+  }
+
   async getActivity(req, res) {
     const { userId } = req.params;
     const { startDate, endDate, type, page = 1, limit = 20 } = req.query;

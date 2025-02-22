@@ -57,9 +57,10 @@ router.post('/:id/change-password', authenticateHandler, userController.changePa
 router.post('/:id/reset-password', userController.requestPasswordReset);
 router.post('/:id/reset-password/confirm', userController.confirmPasswordReset);
 
-// Activity history
+// Activity and audit history
 router.get('/:id/activity', authenticateHandler, userController.getActivityHistory);
 router.get('/:id/login-history', authenticateHandler, userController.getLoginHistory);
+router.get('/:id/audit-history', authenticateHandler, userController.getAuditHistory);
 
 // User's tenants
 router.get('/:id/tenants', authenticateHandler, userController.getTenants);
