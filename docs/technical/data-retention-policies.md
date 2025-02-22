@@ -316,7 +316,6 @@ async function exportUserData(userId) {
 ```
 
 ## Related Documentation
-- Security Policies
-- Compliance Guide
-- Backup Procedures
-- Audit Logging Guide
+- [Security Policies](../security-policies.md)
+- [Backup Procedures](../technical/backup-procedures.md)
+- [Audit Logging Guide](../technical/audit-log-guide.md)
