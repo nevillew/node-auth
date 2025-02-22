@@ -39,9 +39,42 @@ const createUserSchema = async (tenantId) => Joi.object({
 });
 
 const updateUserSchema = Joi.object({
-  name: Joi.string().min(2).max(50).optional(),
-  avatar: Joi.string().uri().optional()
-});
+  name: Joi.string().min(2).max(100).optional(),
+  avatar: Joi.string().uri().allow('').optional(),
+  profile: Joi.object({
+    phoneNumber: Joi.string().pattern(/^[+]*[(]{0,1}[0-9]{1,4}[)]{0,1}[-\s\./0-9]*$/).optional(),
+    address: Joi.string().max(200).optional(),
+    timezone: Joi.string().valid(...Intl.supportedValuesOf('timeZone')).optional(),
+    language: Joi.string().length(2).optional(),
+    bio: Joi.string().max(500).optional(),
+    socialLinks: Joi.object().pattern(Joi.string(), Joi.string().uri()).optional(),
+    skills: Joi.array().items(Joi.string().max(50)).optional(),
+    title: Joi.string().max(100).optional(),
+    department: Joi.string().max(100).optional()
+  }).optional(),
+  preferences: Joi.object({
+    theme: Joi.string().valid('light', 'dark', 'system').optional(),
+    notifications: Joi.object({
+      email: Joi.boolean().optional(),
+      push: Joi.boolean().optional(),
+      sms: Joi.boolean().optional()
+    }).optional(),
+    accessibility: Joi.object({
+      highContrast: Joi.boolean().optional(),
+      fontSize: Joi.string().valid('small', 'normal', 'large').optional()
+    }).optional(),
+    privacy: Joi.object({
+      profileVisibility: Joi.string().valid('public', 'private', 'connections').optional(),
+      activityVisibility: Joi.string().valid('public', 'private', 'connections').optional()
+    }).optional()
+  }).optional(),
+  emailPreferences: Joi.object({
+    marketing: Joi.boolean().optional(),
+    updates: Joi.boolean().optional(),
+    security: Joi.boolean().optional(),
+    newsletter: Joi.boolean().optional()
+  }).optional()
+}).min(1); // Require at least one field to update
 
 const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().required(),
