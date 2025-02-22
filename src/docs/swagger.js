@@ -21,8 +21,61 @@ const options = {
           scheme: 'bearer',
           bearerFormat: 'JWT'
         }
+      },
+      schemas: {
+        User: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            email: { type: 'string', format: 'email' },
+            name: { type: 'string' },
+            avatar: { type: 'string', format: 'uri' },
+            status: { type: 'string', enum: ['active', 'inactive', 'suspended'] },
+            preferences: { type: 'object' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        Tenant: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string' },
+            slug: { type: 'string' },
+            features: { type: 'object' },
+            status: { type: 'string', enum: ['active', 'suspended'] },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        Notification: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            userId: { type: 'string', format: 'uuid' },
+            message: { type: 'string' },
+            read: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        Error: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            code: { type: 'string' }
+          }
+        }
       }
-    }
+    },
+    tags: [
+      { name: 'Auth', description: 'Authentication endpoints' },
+      { name: 'Users', description: 'User management' },
+      { name: 'Tenants', description: 'Tenant management' },
+      { name: 'Notifications', description: 'Notification management' }
+    ],
+    security: [
+      { bearerAuth: [] }
+    ]
   },
   apis: ['./src/routes/*.js']
 };
