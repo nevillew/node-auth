@@ -1,9 +1,18 @@
 const express = require('express');
 const logger = require('./config/logger');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
 const app = express();
+
+// Load API documentation
+const swaggerDocument = YAML.load(path.join(__dirname, 'docs/openapi.yaml'));
 
 // Add request logging middleware
 app.use(logger.addRequestContext);
+
+// Serve API documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Add security headers
 require('./middleware/securityHeaders')(app);
