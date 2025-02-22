@@ -15,20 +15,45 @@ const s3 = new S3Client({
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+  const allowedTypes = {
+    'image/jpeg': ['ffd8ffe0', 'ffd8ffe1', 'ffd8ffe2'],
+    'image/png': ['89504e47'],
+    'image/gif': ['47494638']
+  };
   const maxSize = 5 * 1024 * 1024; // 5MB
   
   // Validate file type
-  if (!allowedTypes.includes(file.mimetype)) {
-    return cb(new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.'), false);
+  if (!allowedTypes[file.mimetype]) {
+    return cb(new AppError('INVALID_FILE_TYPE', 400, {
+      allowed: Object.keys(allowedTypes),
+      received: file.mimetype
+    }));
   }
 
   // Validate file size
   if (file.size > maxSize) {
-    return cb(new Error('File too large. Maximum size is 5MB.'), false);
+    return cb(new AppError('FILE_TOO_LARGE', 400, {
+      maxSize: '5MB',
+      received: `${Math.round(file.size / 1024 / 1024)}MB`
+    }));
   }
 
-  // Validate file name
+  // Validate file name and extension
+  const originalExt = path.extname(file.originalname).toLowerCase();
+  const validExts = {
+    'image/jpeg': ['.jpg', '.jpeg'],
+    'image/png': ['.png'],
+    'image/gif': ['.gif']
+  };
+
+  if (!validExts[file.mimetype].includes(originalExt)) {
+    return cb(new AppError('INVALID_FILE_EXTENSION', 400, {
+      allowed: validExts[file.mimetype],
+      received: originalExt
+    }));
+  }
+
+  // Sanitize filename
   const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
   if (safeName !== file.originalname) {
     file.originalname = safeName;
@@ -36,14 +61,26 @@ const fileFilter = (req, file, cb) => {
 
   // Scan file content
   const fileHeader = file.buffer.slice(0, 4).toString('hex');
-  const validHeaders = {
-    'ffd8ffe0': 'image/jpeg',
-    '89504e47': 'image/png',
-    '47494638': 'image/gif'
-  };
+  if (!allowedTypes[file.mimetype].includes(fileHeader)) {
+    return cb(new AppError('INVALID_FILE_CONTENT', 400, {
+      error: 'File content does not match declared type'
+    }));
+  }
 
-  if (!validHeaders[fileHeader]) {
-    return cb(new Error('Invalid file content'), false);
+  // Scan for malware signatures
+  const malwareSignatures = [
+    'virus_sig_1',
+    'malware_sig_2'
+    // Add more signatures as needed
+  ];
+
+  const fileContent = file.buffer.toString('hex');
+  const hasMalware = malwareSignatures.some(sig => fileContent.includes(sig));
+  
+  if (hasMalware) {
+    return cb(new AppError('MALWARE_DETECTED', 400, {
+      error: 'File appears to contain malware'
+    }));
   }
 
   cb(null, true);

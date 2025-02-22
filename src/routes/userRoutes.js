@@ -7,7 +7,13 @@ const { csrfProtection } = require('../middleware/csrf');
 
 // User management routes
 router.post('/', 
-  authenticateHandler, 
+  authenticateHandler,
+  validate(createUserSchema),
+  csrfProtection,
+  rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10 // 10 requests per hour
+  }),
   (req, res, next) => {
     req.route = { scopes: ['users:write'] };
     next();
