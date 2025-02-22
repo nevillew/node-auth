@@ -1,4 +1,4 @@
-const { createClient } = require('@redis/client');
+const { createClient } = require('redis');
 const { promisify } = require('util');
 const logger = require('./logger');
 const fallbackCache = require('../services/fallbackCache');
