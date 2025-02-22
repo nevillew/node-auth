@@ -13,6 +13,7 @@ router.delete('/:id', authenticateHandler, tenantController.delete);
 // Tenant user management routes
 router.post('/:id/users', authenticateHandler, tenantController.addUser);
 router.delete('/:id/users/:userId', authenticateHandler, tenantController.removeUser);
+router.post('/:id/users/:userId/remove', authenticateHandler, tenantController.removeUser);
 router.put('/:id/users/:userId/roles', authenticateHandler, tenantController.updateUserRoles);
 
 module.exports = router;
