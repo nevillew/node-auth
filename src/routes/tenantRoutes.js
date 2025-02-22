@@ -23,6 +23,7 @@ router.post('/:id/suspend', authenticateHandler, tenantController.suspend);
 router.delete('/:id', authenticateHandler, tenantController.delete);
 router.post('/:id/restore', authenticateHandler, tenantController.restore);
 router.get('/:id/audit-history', authenticateHandler, tenantController.getAuditHistory);
+router.get('/:id/login-history', authenticateHandler, tenantController.getLoginHistory);
 
 // Tenant user management routes
 

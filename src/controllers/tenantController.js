@@ -61,6 +61,52 @@ class TenantController {
   }
 
   // Restore tenant
+  async getLoginHistory(req, res) {
+    try {
+      const { 
+        startDate, 
+        endDate, 
+        status,
+        userId,
+        page = 1, 
+        limit = 20,
+        sortOrder = 'DESC'
+      } = req.query;
+
+      const where = { tenantId: req.params.id };
+      
+      if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) where.createdAt[Op.gte] = new Date(startDate);
+        if (endDate) where.createdAt[Op.lte] = new Date(endDate);
+      }
+
+      if (status) where.status = status;
+      if (userId) where.userId = userId;
+
+      const loginHistory = await LoginHistory.findAndCountAll({
+        where,
+        include: [{
+          model: User,
+          attributes: ['email', 'name']
+        }],
+        order: [['createdAt', sortOrder]],
+        limit: parseInt(limit),
+        offset: (page - 1) * limit
+      });
+
+      res.json({
+        history: loginHistory.rows,
+        total: loginHistory.count,
+        page: parseInt(page),
+        totalPages: Math.ceil(loginHistory.count / limit)
+      });
+    } catch (error) {
+      logger.error('Tenant login history retrieval failed:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
   async getAuditHistory(req, res) {
     try {
       const { 
