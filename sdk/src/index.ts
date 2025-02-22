@@ -62,7 +62,13 @@ export class MultiTenantSDK {
   }
 
   async logout(): Promise<void> {
-    this.token = undefined;
+    try {
+      // Call logout endpoint to revoke token
+      await this.client.post('/auth/logout');
+    } finally {
+      // Clear token even if request fails
+      this.token = undefined;
+    }
   }
 
   // User methods
