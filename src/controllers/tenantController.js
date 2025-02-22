@@ -208,8 +208,8 @@ class TenantController {
       
       // Handle logo upload if present
       if (req.file) {
-        const logoUrl = await uploadToS3(req.file, 'tenant-logos');
-        updates.logo = logoUrl;
+        const { signedUrl } = await uploadToS3(req.file, 'tenant-logos');
+        updates.logo = signedUrl;
       }
       
       if (!tenant) {

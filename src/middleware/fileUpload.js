@@ -31,21 +31,32 @@ const upload = multer({
   }
 });
 
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
 const uploadToS3 = async (file, folder) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const key = `${folder}/${uuidv4()}${ext}`;
   
-  const params = {
+  const uploadParams = {
     Bucket: process.env.AWS_BUCKET_NAME,
     Key: key,
     Body: file.buffer,
-    ContentType: file.mimetype,
-    ACL: 'public-read'
+    ContentType: file.mimetype
   };
 
   try {
-    await s3.send(new PutObjectCommand(params));
-    return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    // Upload file
+    await s3.send(new PutObjectCommand(uploadParams));
+    
+    // Generate signed URL for access
+    const signedUrlParams = {
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: key,
+      Expires: 3600 // 1 hour
+    };
+    
+    const signedUrl = await getSignedUrl(s3, new GetObjectCommand(signedUrlParams));
+    return { key, signedUrl };
   } catch (error) {
     logger.error('S3 upload failed:', error);
     throw new Error('Failed to upload file');

@@ -55,6 +55,11 @@ module.exports = (sequelize, DataTypes) => {
       validate: {
         isUrl: {
           msg: 'Avatar must be a valid URL'
+        },
+        isSignedS3Url(value) {
+          if (value && !value.includes('X-Amz-Signature')) {
+            throw new Error('Avatar URL must be a signed S3 URL');
+          }
         }
       }
     },
