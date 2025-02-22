@@ -76,6 +76,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true
     },
+    twoFactorVerificationAttempts: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
+    twoFactorLastFailedAttempt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     emailVerified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
