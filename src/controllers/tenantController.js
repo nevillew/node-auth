@@ -303,6 +303,70 @@ class TenantController {
   }
 
   // Get tenant details
+  async list(req, res) {
+    try {
+      const { 
+        status,
+        search,
+        page = 1,
+        limit = 20,
+        sortBy = 'name',
+        sortOrder = 'ASC'
+      } = req.query;
+
+      const where = {};
+      
+      if (status) {
+        where.status = status;
+      }
+
+      if (search) {
+        where[Op.or] = [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { slug: { [Op.iLike]: `%${search}%` } }
+        ];
+      }
+
+      const tenants = await Tenant.findAndCountAll({
+        where,
+        order: [[sortBy, sortOrder]],
+        limit: parseInt(limit),
+        offset: (page - 1) * limit,
+        attributes: [
+          'id', 
+          'name',
+          'slug',
+          'status',
+          'logo',
+          'onboardingStatus',
+          'createdAt'
+        ]
+      });
+
+      // Generate signed URLs for logos
+      const tenantsWithSignedUrls = await Promise.all(tenants.rows.map(async (tenant) => {
+        const tenantData = tenant.toJSON();
+        if (tenantData.logo) {
+          tenantData.logoUrl = await getSignedUrl(s3, new GetObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: tenantData.logo
+          }), { expiresIn: 24 * 60 * 60 });
+        }
+        return tenantData;
+      }));
+
+      res.json({
+        tenants: tenantsWithSignedUrls,
+        total: tenants.count,
+        page: parseInt(page),
+        totalPages: Math.ceil(tenants.count / limit)
+      });
+    } catch (error) {
+      logger.error('Tenant listing failed:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   async get(req, res) {
     try {
       const tenant = await Tenant.findByPk(req.params.id, {

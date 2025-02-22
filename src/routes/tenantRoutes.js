@@ -13,6 +13,7 @@ router.post('/',
   },
   tenantController.create
 );
+router.get('/', authenticateHandler, tenantController.list);
 router.get('/:id', authenticateHandler, tenantController.get);
 router.put('/:id', 
   authenticateHandler,
