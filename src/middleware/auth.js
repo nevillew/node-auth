@@ -36,6 +36,28 @@ const authenticateHandler = async (req, res, next) => {
       }]
     });
 
+    // For M2M tokens, validate tenant access
+    if (token.type === 'm2m') {
+      const requestedTenantId = req.headers['x-tenant-id'];
+      if (!requestedTenantId) {
+        throw new Error('Tenant ID required for M2M token access');
+      }
+      
+      if (token.tenantId !== requestedTenantId) {
+        await SecurityAuditLog.create({
+          userId: token.user?.id,
+          event: 'M2M_UNAUTHORIZED_TENANT_ACCESS',
+          details: {
+            tokenTenantId: token.tenantId,
+            requestedTenantId,
+            clientId: token.clientId
+          },
+          severity: 'high'
+        });
+        throw new Error('M2M token not authorized for this tenant');
+      }
+    }
+
     // Verify token has required scopes for the route
     const requiredScopes = req.route?.scopes || [];
     if (requiredScopes.length > 0) {
