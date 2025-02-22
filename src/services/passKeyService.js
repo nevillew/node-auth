@@ -15,8 +15,21 @@ const expectedOrigin = process.env.ORIGIN || `https://${rpID}`;
 class PassKeyService {
   async generateRegistrationOptions(user) {
     try {
-      const userAuthenticators = await user.getAuthenticators();
+      // Validate user
+      if (!user || !user.id) {
+        throw new Error('Invalid user');
+      }
 
+      // Get existing authenticators
+      const userAuthenticators = await user.getAuthenticators();
+      
+      // Validate maximum number of authenticators
+      const maxAuthenticators = process.env.MAX_AUTHENTICATORS || 5;
+      if (userAuthenticators.length >= maxAuthenticators) {
+        throw new Error(`Maximum of ${maxAuthenticators} authenticators allowed`);
+      }
+
+      // Generate registration options
       const options = await generateRegistrationOptions({
         rpName: process.env.RP_NAME || 'Multi-tenant App',
         rpID,
@@ -38,6 +51,11 @@ class PassKeyService {
         challenge: crypto.randomBytes(32) // Strong random challenge
       });
 
+      // Validate generated options
+      if (!options.challenge || !options.user.id) {
+        throw new Error('Failed to generate valid registration options');
+      }
+
       // Save challenge for verification
       await user.update({
         currentChallenge: options.challenge,
@@ -54,6 +72,11 @@ class PassKeyService {
   async verifyRegistration(user, response) {
     const t = await sequelize.transaction();
     try {
+      // Validate input
+      if (!user || !response) {
+        throw new Error('Invalid input parameters');
+      }
+
       // Validate registration time window
       const registrationStart = user.passkeyRegistrationStartedAt;
       if (!registrationStart || (new Date() - registrationStart) > 120000) { // 2 minutes
@@ -63,6 +86,11 @@ class PassKeyService {
       const expectedChallenge = user.currentChallenge;
       if (!expectedChallenge) {
         throw new Error('No registration challenge found');
+      }
+
+      // Validate response structure
+      if (!response.id || !response.rawId || !response.response) {
+        throw new Error('Invalid registration response');
       }
 
       const verification = await verifyRegistrationResponse({
@@ -75,53 +103,60 @@ class PassKeyService {
 
       const { verified, registrationInfo } = verification;
 
-      if (verified && registrationInfo) {
-        const { credentialID, credentialPublicKey, counter } = registrationInfo;
-
-        // Check if credential already exists
-        const existingAuth = await Authenticator.findOne({
-          where: { credentialID: isoBase64URL.toBuffer(credentialID) },
-          transaction: t
-        });
-
-        if (existingAuth) {
-          throw new Error('Credential already registered');
-        }
-
-        await user.createAuthenticator({
-          credentialID: isoBase64URL.toBuffer(credentialID),
-          credentialPublicKey: credentialPublicKey,
-          counter: counter,
-          transports: response.response.transports,
-          lastUsedAt: new Date()
-        }, { transaction: t });
-
-        // Clear registration state
-        await user.update({ 
-          currentChallenge: null,
-          passkeyRegistrationStartedAt: null,
-          passKeyEnabled: true 
-        }, { transaction: t });
-
-        // Create security audit log
-        await SecurityAuditLog.create({
-          userId: user.id,
-          event: 'PASSKEY_REGISTERED',
-          details: {
-            authenticator: {
-              aaguid: registrationInfo.aaguid,
-              credentialType: registrationInfo.credentialType,
-              attestationType: registrationInfo.attestationType
-            }
-          },
-          severity: 'medium'
-        }, { transaction: t });
-
-        await t.commit();
-        return verified;
+      if (!verified || !registrationInfo) {
+        throw new Error('Registration verification failed');
       }
 
-      throw new Error('Registration verification failed');
+      const { credentialID, credentialPublicKey, counter } = registrationInfo;
+
+      // Validate credential ID
+      if (!credentialID || credentialID.length === 0) {
+        throw new Error('Invalid credential ID');
+      }
+
+      // Check if credential already exists
+      const existingAuth = await Authenticator.findOne({
+        where: { credentialID: isoBase64URL.toBuffer(credentialID) },
+        transaction: t
+      });
+
+      if (existingAuth) {
+        throw new Error('Credential already registered');
+      }
+
+      // Create new authenticator
+      await user.createAuthenticator({
+        credentialID: isoBase64URL.toBuffer(credentialID),
+        credentialPublicKey: credentialPublicKey,
+        counter: counter,
+        transports: response.response.transports || [],
+        lastUsedAt: new Date(),
+        friendlyName: response.friendlyName || 'Primary Authenticator'
+      }, { transaction: t });
+
+      // Clear registration state
+      await user.update({ 
+        currentChallenge: null,
+        passkeyRegistrationStartedAt: null,
+        passKeyEnabled: true 
+      }, { transaction: t });
+
+      // Create security audit log
+      await SecurityAuditLog.create({
+        userId: user.id,
+        event: 'PASSKEY_REGISTERED',
+        details: {
+          authenticator: {
+            aaguid: registrationInfo.aaguid,
+            credentialType: registrationInfo.credentialType,
+            attestationType: registrationInfo.attestationType
+          }
+        },
+        severity: 'medium'
+      }, { transaction: t });
+
+      await t.commit();
+      return verified;
     } catch (error) {
       await t.rollback();
       logger.error('Passkey registration verification failed:', error);

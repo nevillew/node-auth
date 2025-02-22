@@ -82,7 +82,10 @@ router.post('/passkey/register/options', authenticateHandler, async (req, res) =
     const options = await passKeyService.generateRegistrationOptions(req.user);
     res.json(options);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      code: 'PASSKEY_REGISTRATION_ERROR'
+    });
   }
 });
 
@@ -93,10 +96,76 @@ router.post('/passkey/register/verify', authenticateHandler, async (req, res) =>
       await req.user.update({ passKeyEnabled: true });
       res.json({ success: true });
     } else {
-      res.status(400).json({ error: 'Verification failed' });
+      res.status(400).json({ 
+        error: 'Verification failed',
+        code: 'PASSKEY_VERIFICATION_FAILED'
+      });
     }
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      code: 'PASSKEY_VERIFICATION_ERROR'
+    });
+  }
+});
+
+// Manage authenticators
+router.get('/passkey/authenticators', authenticateHandler, async (req, res) => {
+  try {
+    const authenticators = await req.user.getAuthenticators({
+      attributes: ['id', 'friendlyName', 'createdAt', 'lastUsedAt']
+    });
+    res.json(authenticators);
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      code: 'AUTHENTICATOR_LIST_ERROR'
+    });
+  }
+});
+
+router.delete('/passkey/authenticators/:id', authenticateHandler, async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const authenticator = await Authenticator.findOne({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      },
+      transaction: t
+    });
+
+    if (!authenticator) {
+      await t.rollback();
+      return res.status(404).json({ 
+        error: 'Authenticator not found',
+        code: 'AUTHENTICATOR_NOT_FOUND'
+      });
+    }
+
+    // Ensure user has at least one authenticator remaining
+    const remaining = await Authenticator.count({
+      where: { userId: req.user.id },
+      transaction: t
+    });
+
+    if (remaining <= 1) {
+      await t.rollback();
+      return res.status(400).json({ 
+        error: 'Cannot delete last authenticator',
+        code: 'LAST_AUTHENTICATOR'
+      });
+    }
+
+    await authenticator.destroy({ transaction: t });
+    await t.commit();
+    res.status(204).send();
+  } catch (error) {
+    await t.rollback();
+    res.status(500).json({ 
+      error: error.message,
+      code: 'AUTHENTICATOR_DELETION_ERROR'
+    });
   }
 });
 

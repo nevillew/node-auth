@@ -27,7 +27,12 @@ module.exports = (sequelize, DataTypes) => {
     credentialID: {
       type: DataTypes.BLOB,
       allowNull: false,
-      unique: true
+      unique: true,
+      validate: {
+        notEmpty: {
+          msg: 'Credential ID cannot be empty'
+        }
+      }
     },
     credentialPublicKey: {
       type: DataTypes.BLOB,
