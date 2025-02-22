@@ -61,6 +61,40 @@ class TenantController {
   }
 
   // Restore tenant
+  async getAuditHistory(req, res) {
+    try {
+      const { 
+        startDate, 
+        endDate, 
+        severity,
+        event,
+        userId,
+        page,
+        limit,
+        sortOrder 
+      } = req.query;
+
+      const auditHistory = await securityAuditService.getTenantAuditHistory(
+        req.params.id,
+        {
+          startDate,
+          endDate,
+          severity,
+          event,
+          userId,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          sortOrder
+        }
+      );
+
+      res.json(auditHistory);
+    } catch (error) {
+      logger.error('Tenant audit history retrieval failed:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
   async restore(req, res) {
     const t = await sequelize.transaction();
     try {
