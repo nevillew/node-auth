@@ -2,6 +2,23 @@ const { createClient } = require('redis');
 const { promisify } = require('util');
 const logger = require('./logger');
 const fallbackCache = require('../services/fallbackCache');
+const compression = require('compression');
+
+// Cache TTL constants
+const CACHE_TTL = {
+  SHORT: 300,  // 5 minutes
+  MEDIUM: 1800, // 30 minutes
+  LONG: 3600,  // 1 hour
+  VERY_LONG: 86400 // 24 hours
+};
+
+// Cache prefixes
+const CACHE_PREFIX = {
+  USER: 'user:',
+  TENANT: 'tenant:',
+  ROLE: 'role:',
+  SETTINGS: 'settings:'
+};
 
 const redisPool = [];
 const MAX_POOL_SIZE = process.env.REDIS_POOL_SIZE || 10;

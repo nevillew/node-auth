@@ -44,7 +44,18 @@ const config = {
     database: process.env.DB_NAME,
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
-    dialect: 'postgres'
+    dialect: 'postgres',
+    pool: {
+      max: 20,
+      min: 5,
+      acquire: 30000,
+      idle: 10000
+    },
+    dialectOptions: {
+      statement_timeout: 10000, // 10s query timeout
+      idle_in_transaction_session_timeout: 30000 // 30s transaction timeout
+    },
+    logging: false // Disable logging in development
   },
   test: {
     username: process.env.DB_USERNAME,
