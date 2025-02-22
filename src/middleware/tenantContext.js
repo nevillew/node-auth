@@ -1,4 +1,6 @@
 const { manager } = require('../config/database');
+const { isIPInRange } = require('../utils/ipUtils');
+const logger = require('../config/logger');
 
 module.exports = async (req, res, next) => {
   try {
@@ -8,9 +10,20 @@ module.exports = async (req, res, next) => {
       return res.status(400).json({ error: 'Tenant ID is required' });
     }
 
-    // Get tenant connection
-    const tenantDb = await manager.getTenantConnection(tenantId);
-    
+    // Get tenant connection from cache or database
+    const redisClient = await manager.getRedisClient();
+    const cacheKey = `tenant:${tenantId}`;
+    let tenantDb;
+
+    const cachedTenant = await redisClient.get(cacheKey);
+    if (cachedTenant) {
+      tenantDb = JSON.parse(cachedTenant);
+      await redisClient.expire(cacheKey, 3600); // Refresh TTL
+    } else {
+      tenantDb = await manager.getTenantConnection(tenantId);
+      await redisClient.set(cacheKey, JSON.stringify(tenantDb), { EX: 3600 });
+    }
+
     // Set tenant context
     req.tenant = {
       id: tenantId,
@@ -28,13 +41,11 @@ module.exports = async (req, res, next) => {
       const clientIP = req.ip || req.connection.remoteAddress;
       const { allowedIPs, allowedRanges, blockList } = tenant.securityPolicy.ipRestrictions;
 
-      // Check if IP is blocked
       if (blockList.includes(clientIP)) {
         logger.warn('Blocked IP attempt', { ip: clientIP, tenantId });
         return res.status(403).json({ error: 'IP address is blocked' });
       }
 
-      // Check if IP is explicitly allowed
       const isAllowed = allowedIPs.includes(clientIP) || 
                        allowedRanges.some(range => isIPInRange(clientIP, range));
 
