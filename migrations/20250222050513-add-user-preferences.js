@@ -1,40 +1,13 @@
 'use strict';
 
+// This migration is now empty since these columns were already added
+// in migration 20250222000003-add-user-activity-tracking
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('Users', 'preferences', {
-      type: Sequelize.JSON,
-      defaultValue: {
-        theme: 'light',
-        notifications: {
-          email: true,
-          push: true,
-          sms: false
-        },
-        accessibility: {
-          highContrast: false,
-          fontSize: 'normal'
-        },
-        privacy: {
-          profileVisibility: 'public',
-          activityVisibility: 'private'
-        }
-      }
-    });
-
-    await queryInterface.addColumn('Users', 'emailPreferences', {
-      type: Sequelize.JSON,
-      defaultValue: {
-        marketing: true,
-        updates: true,
-        security: true,
-        newsletter: false
-      }
-    });
+    // Columns already exist
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.removeColumn('Users', 'preferences');
-    await queryInterface.removeColumn('Users', 'emailPreferences');
+    // Do nothing since we didn't add the columns
   }
 };
