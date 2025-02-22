@@ -1,0 +1,2890 @@
+{
+  "timestamp": "2025-02-22T09:52:37.090Z",
+  "summary": {
+    "filesAnalyzed": 71,
+    "totalIssues": 162
+  },
+  "results": [
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/app.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/auth/scopes.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "expandScope",
+          "line": 42,
+          "message": "Missing documentation for function \"expandScope\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "validateScopes",
+          "line": 61,
+          "message": "Missing documentation for function \"validateScopes\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "hasRequiredScopes",
+          "line": 66,
+          "message": "Missing documentation for function \"hasRequiredScopes\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "scope",
+          "line": 42,
+          "message": "Missing documentation for parameter \"scope\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "scopes",
+          "line": 61,
+          "message": "Missing documentation for parameter \"scopes\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "userScopes",
+          "line": 66,
+          "message": "Missing documentation for parameter \"userScopes\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "requiredScopes",
+          "line": 66,
+          "message": "Missing documentation for parameter \"requiredScopes\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "expandScope",
+            "line": 42,
+            "message": "Missing documentation for function \"expandScope\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"expandScope\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "validateScopes",
+            "line": 61,
+            "message": "Missing documentation for function \"validateScopes\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"validateScopes\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "hasRequiredScopes",
+            "line": 66,
+            "message": "Missing documentation for function \"hasRequiredScopes\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"hasRequiredScopes\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "scope",
+            "line": 42,
+            "message": "Missing documentation for parameter \"scope\""
+          },
+          "suggestion": "Add @param tag for parameter \"scope\":\n * @param {Type} scope - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "scopes",
+            "line": 61,
+            "message": "Missing documentation for parameter \"scopes\""
+          },
+          "suggestion": "Add @param tag for parameter \"scopes\":\n * @param {Type} scopes - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "userScopes",
+            "line": 66,
+            "message": "Missing documentation for parameter \"userScopes\""
+          },
+          "suggestion": "Add @param tag for parameter \"userScopes\":\n * @param {Type} userScopes - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "requiredScopes",
+            "line": 66,
+            "message": "Missing documentation for parameter \"requiredScopes\""
+          },
+          "suggestion": "Add @param tag for parameter \"requiredScopes\":\n * @param {Type} requiredScopes - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/bin/analyze-docs.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "analyzeFiles",
+          "line": 20,
+          "message": "Missing documentation for function \"analyzeFiles\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "pattern",
+          "line": 20,
+          "message": "Missing documentation for parameter \"pattern\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "analyzeFiles",
+            "line": 20,
+            "message": "Missing documentation for function \"analyzeFiles\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"analyzeFiles\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "pattern",
+            "line": 20,
+            "message": "Missing documentation for parameter \"pattern\""
+          },
+          "suggestion": "Add @param tag for parameter \"pattern\":\n * @param {Type} pattern - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/config/auth.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/config/database.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "DatabaseManager",
+          "line": 86,
+          "message": "Missing documentation for class \"DatabaseManager\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "DatabaseManager",
+            "line": 86,
+            "message": "Missing documentation for class \"DatabaseManager\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"DatabaseManager\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/config/logger.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/config/redis.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "releaseRedisClient",
+          "line": 102,
+          "message": "Missing documentation for function \"releaseRedisClient\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "client",
+          "line": 102,
+          "message": "Missing documentation for parameter \"client\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "releaseRedisClient",
+            "line": 102,
+            "message": "Missing documentation for function \"releaseRedisClient\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"releaseRedisClient\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "client",
+            "line": 102,
+            "message": "Missing documentation for parameter \"client\""
+          },
+          "suggestion": "Add @param tag for parameter \"client\":\n * @param {Type} client - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/constants/errors.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "getErrorResponse",
+          "line": 119,
+          "message": "Missing documentation for function \"getErrorResponse\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "errorCode",
+          "line": 119,
+          "message": "Missing documentation for parameter \"errorCode\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "details",
+          "line": 119,
+          "message": "Missing documentation for parameter \"details\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "getErrorResponse",
+            "line": 119,
+            "message": "Missing documentation for function \"getErrorResponse\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"getErrorResponse\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "errorCode",
+            "line": 119,
+            "message": "Missing documentation for parameter \"errorCode\""
+          },
+          "suggestion": "Add @param tag for parameter \"errorCode\":\n * @param {Type} errorCode - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "details",
+            "line": 119,
+            "message": "Missing documentation for parameter \"details\""
+          },
+          "suggestion": "Add @param tag for parameter \"details\":\n * @param {Type} details - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/controllers/roleController.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "RoleController",
+          "line": 5,
+          "message": "Missing documentation for class \"RoleController\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "RoleController",
+            "line": 5,
+            "message": "Missing documentation for class \"RoleController\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"RoleController\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/controllers/tenantController.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "TenantController",
+          "line": 7,
+          "message": "Missing documentation for class \"TenantController\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "TenantController",
+            "line": 7,
+            "message": "Missing documentation for class \"TenantController\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"TenantController\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/controllers/userController.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "UserController",
+          "line": 14,
+          "message": "Missing documentation for class \"UserController\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "UserController",
+            "line": 14,
+            "message": "Missing documentation for class \"UserController\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"UserController\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/docs/swagger.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/auth.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "tokenAge",
+          "line": 147,
+          "message": "Missing documentation for function \"tokenAge\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "Date.now(",
+          "line": 147,
+          "message": "Missing documentation for parameter \"Date.now(\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "tokenAge",
+            "line": 147,
+            "message": "Missing documentation for function \"tokenAge\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"tokenAge\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "Date.now(",
+            "line": 147,
+            "message": "Missing documentation for parameter \"Date.now(\""
+          },
+          "suggestion": "Add @param tag for parameter \"Date.now(\":\n * @param {Type} Date.now( - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/csrf.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "generateCsrfToken",
+          "line": 21,
+          "message": "Missing documentation for function \"generateCsrfToken\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "validateCsrfToken",
+          "line": 49,
+          "message": "Missing documentation for function \"validateCsrfToken\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "req",
+          "line": 21,
+          "message": "Missing documentation for parameter \"req\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "res",
+          "line": 21,
+          "message": "Missing documentation for parameter \"res\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "next",
+          "line": 21,
+          "message": "Missing documentation for parameter \"next\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "req",
+          "line": 49,
+          "message": "Missing documentation for parameter \"req\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "res",
+          "line": 49,
+          "message": "Missing documentation for parameter \"res\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "next",
+          "line": 49,
+          "message": "Missing documentation for parameter \"next\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "generateCsrfToken",
+            "line": 21,
+            "message": "Missing documentation for function \"generateCsrfToken\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"generateCsrfToken\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "validateCsrfToken",
+            "line": 49,
+            "message": "Missing documentation for function \"validateCsrfToken\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"validateCsrfToken\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "req",
+            "line": 21,
+            "message": "Missing documentation for parameter \"req\""
+          },
+          "suggestion": "Add @param tag for parameter \"req\":\n * @param {Type} req - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "res",
+            "line": 21,
+            "message": "Missing documentation for parameter \"res\""
+          },
+          "suggestion": "Add @param tag for parameter \"res\":\n * @param {Type} res - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "next",
+            "line": 21,
+            "message": "Missing documentation for parameter \"next\""
+          },
+          "suggestion": "Add @param tag for parameter \"next\":\n * @param {Type} next - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "req",
+            "line": 49,
+            "message": "Missing documentation for parameter \"req\""
+          },
+          "suggestion": "Add @param tag for parameter \"req\":\n * @param {Type} req - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "res",
+            "line": 49,
+            "message": "Missing documentation for parameter \"res\""
+          },
+          "suggestion": "Add @param tag for parameter \"res\":\n * @param {Type} res - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "next",
+            "line": 49,
+            "message": "Missing documentation for parameter \"next\""
+          },
+          "suggestion": "Add @param tag for parameter \"next\":\n * @param {Type} next - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/errorHandler.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "errorHandler",
+          "line": 17,
+          "message": "Missing documentation for function \"errorHandler\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "AppError",
+          "line": 4,
+          "message": "Missing documentation for class \"AppError\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "err",
+          "line": 17,
+          "message": "Missing documentation for parameter \"err\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "req",
+          "line": 17,
+          "message": "Missing documentation for parameter \"req\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "res",
+          "line": 17,
+          "message": "Missing documentation for parameter \"res\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "next",
+          "line": 17,
+          "message": "Missing documentation for parameter \"next\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "errorHandler",
+            "line": 17,
+            "message": "Missing documentation for function \"errorHandler\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"errorHandler\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "AppError",
+            "line": 4,
+            "message": "Missing documentation for class \"AppError\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"AppError\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "err",
+            "line": 17,
+            "message": "Missing documentation for parameter \"err\""
+          },
+          "suggestion": "Add @param tag for parameter \"err\":\n * @param {Type} err - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "req",
+            "line": 17,
+            "message": "Missing documentation for parameter \"req\""
+          },
+          "suggestion": "Add @param tag for parameter \"req\":\n * @param {Type} req - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "res",
+            "line": 17,
+            "message": "Missing documentation for parameter \"res\""
+          },
+          "suggestion": "Add @param tag for parameter \"res\":\n * @param {Type} res - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "next",
+            "line": 17,
+            "message": "Missing documentation for parameter \"next\""
+          },
+          "suggestion": "Add @param tag for parameter \"next\":\n * @param {Type} next - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/fileUpload.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "fileFilter",
+          "line": 17,
+          "message": "Missing documentation for function \"fileFilter\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "req",
+          "line": 17,
+          "message": "Missing documentation for parameter \"req\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "file",
+          "line": 17,
+          "message": "Missing documentation for parameter \"file\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "cb",
+          "line": 17,
+          "message": "Missing documentation for parameter \"cb\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "fileFilter",
+            "line": 17,
+            "message": "Missing documentation for function \"fileFilter\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"fileFilter\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "req",
+            "line": 17,
+            "message": "Missing documentation for parameter \"req\""
+          },
+          "suggestion": "Add @param tag for parameter \"req\":\n * @param {Type} req - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "file",
+            "line": 17,
+            "message": "Missing documentation for parameter \"file\""
+          },
+          "suggestion": "Add @param tag for parameter \"file\":\n * @param {Type} file - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "cb",
+            "line": 17,
+            "message": "Missing documentation for parameter \"cb\""
+          },
+          "suggestion": "Add @param tag for parameter \"cb\":\n * @param {Type} cb - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/sanitize.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "sanitizeMiddleware",
+          "line": 5,
+          "message": "Missing documentation for function \"sanitizeMiddleware\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "req",
+          "line": 5,
+          "message": "Missing documentation for parameter \"req\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "res",
+          "line": 5,
+          "message": "Missing documentation for parameter \"res\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "next",
+          "line": 5,
+          "message": "Missing documentation for parameter \"next\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "sanitizeMiddleware",
+            "line": 5,
+            "message": "Missing documentation for function \"sanitizeMiddleware\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"sanitizeMiddleware\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "req",
+            "line": 5,
+            "message": "Missing documentation for parameter \"req\""
+          },
+          "suggestion": "Add @param tag for parameter \"req\":\n * @param {Type} req - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "res",
+            "line": 5,
+            "message": "Missing documentation for parameter \"res\""
+          },
+          "suggestion": "Add @param tag for parameter \"res\":\n * @param {Type} res - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "next",
+            "line": 5,
+            "message": "Missing documentation for parameter \"next\""
+          },
+          "suggestion": "Add @param tag for parameter \"next\":\n * @param {Type} next - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/securityHeaders.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/tenantContext.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/middleware/validate.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "validate",
+          "line": 7,
+          "message": "Missing documentation for function \"validate\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "schema",
+          "line": 7,
+          "message": "Missing documentation for parameter \"schema\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "location",
+          "line": 7,
+          "message": "Missing documentation for parameter \"location\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "validate",
+            "line": 7,
+            "message": "Missing documentation for function \"validate\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"validate\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "schema",
+            "line": 7,
+            "message": "Missing documentation for parameter \"schema\""
+          },
+          "suggestion": "Add @param tag for parameter \"schema\":\n * @param {Type} schema - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "location",
+            "line": 7,
+            "message": "Missing documentation for parameter \"location\""
+          },
+          "suggestion": "Add @param tag for parameter \"location\":\n * @param {Type} location - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/activityLog.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "ActivityLog",
+          "line": 4,
+          "message": "Missing documentation for class \"ActivityLog\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "ActivityLog",
+            "line": 4,
+            "message": "Missing documentation for class \"ActivityLog\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"ActivityLog\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/authenticator.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "Authenticator",
+          "line": 4,
+          "message": "Missing documentation for class \"Authenticator\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Authenticator",
+            "line": 4,
+            "message": "Missing documentation for class \"Authenticator\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Authenticator\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/index.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/invitation.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "Invitation",
+          "line": 4,
+          "message": "Missing documentation for class \"Invitation\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Invitation",
+            "line": 4,
+            "message": "Missing documentation for class \"Invitation\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Invitation\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/loginHistory.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "LoginHistory",
+          "line": 4,
+          "message": "Missing documentation for class \"LoginHistory\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "LoginHistory",
+            "line": 4,
+            "message": "Missing documentation for class \"LoginHistory\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"LoginHistory\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/notification.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "Notification",
+          "line": 4,
+          "message": "Missing documentation for class \"Notification\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Notification",
+            "line": 4,
+            "message": "Missing documentation for class \"Notification\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Notification\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/role.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "Role",
+          "line": 4,
+          "message": "Missing documentation for class \"Role\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Role",
+            "line": 4,
+            "message": "Missing documentation for class \"Role\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Role\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/rolePermission.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "RolePermission",
+          "line": 4,
+          "message": "Missing documentation for class \"RolePermission\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "RolePermission",
+            "line": 4,
+            "message": "Missing documentation for class \"RolePermission\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"RolePermission\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/securityAuditLog.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "SecurityAuditLog",
+          "line": 4,
+          "message": "Missing documentation for class \"SecurityAuditLog\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "SecurityAuditLog",
+            "line": 4,
+            "message": "Missing documentation for class \"SecurityAuditLog\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"SecurityAuditLog\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/tenant.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "Tenant",
+          "line": 4,
+          "message": "Missing documentation for class \"Tenant\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Tenant",
+            "line": 4,
+            "message": "Missing documentation for class \"Tenant\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Tenant\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/user.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "User",
+          "line": 4,
+          "message": "Missing documentation for class \"User\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "User",
+            "line": 4,
+            "message": "Missing documentation for class \"User\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"User\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/models/userRole.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "UserRole",
+          "line": 4,
+          "message": "Missing documentation for class \"UserRole\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "UserRole",
+            "line": 4,
+            "message": "Missing documentation for class \"UserRole\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"UserRole\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/index.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/lib/argument.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "Argument",
+          "line": 3,
+          "message": "Missing documentation for class \"Argument\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "arg",
+          "line": 142,
+          "message": "Missing documentation for parameter \"arg\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Argument",
+            "line": 3,
+            "message": "Missing documentation for class \"Argument\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Argument\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "arg",
+            "line": 142,
+            "message": "Missing documentation for parameter \"arg\""
+          },
+          "suggestion": "Add @param tag for parameter \"arg\":\n * @param {Type} arg - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/lib/command.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "listener",
+          "line": 541,
+          "message": "Missing documentation for function \"listener\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "knownBy",
+          "line": 628,
+          "message": "Missing documentation for function \"knownBy\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "handleOptionValue",
+          "line": 674,
+          "message": "Missing documentation for function \"handleOptionValue\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "findFile",
+          "line": 1189,
+          "message": "Missing documentation for function \"findFile\""
+        },
+        {
+          "type": "incomplete-function-doc",
+          "name": "myParseArg",
+          "line": 1411,
+          "message": "Incomplete documentation for function \"myParseArg\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "checkForUnknownOptions",
+          "line": 1572,
+          "message": "Missing documentation for function \"checkForUnknownOptions\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "maybeOption",
+          "line": 1736,
+          "message": "Missing documentation for function \"maybeOption\""
+        },
+        {
+          "type": "incomplete-function-doc",
+          "name": "hasCustomOptionValue",
+          "line": 1958,
+          "message": "Incomplete documentation for function \"hasCustomOptionValue\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "findBestOptionFromValue",
+          "line": 2033,
+          "message": "Missing documentation for function \"findBestOptionFromValue\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "getErrorMessage",
+          "line": 2053,
+          "message": "Missing documentation for function \"getErrorMessage\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "write",
+          "line": 2381,
+          "message": "Missing documentation for function \"write\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "incrementNodeInspectorPort",
+          "line": 2590,
+          "message": "Missing documentation for function \"incrementNodeInspectorPort\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "Command",
+          "line": 13,
+          "message": "Missing documentation for class \"Command\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "args",
+          "line": 541,
+          "message": "Missing documentation for parameter \"args\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "option.short && this._findOption(option.short",
+          "line": 604,
+          "message": "Missing documentation for parameter \"option.short && this._findOption(option.short\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "cmd",
+          "line": 628,
+          "message": "Missing documentation for parameter \"cmd\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "val",
+          "line": 674,
+          "message": "Missing documentation for parameter \"val\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "invalidValueMessage",
+          "line": 674,
+          "message": "Missing documentation for parameter \"invalidValueMessage\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "valueSource",
+          "line": 674,
+          "message": "Missing documentation for parameter \"valueSource\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "baseDir",
+          "line": 1189,
+          "message": "Missing documentation for parameter \"baseDir\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "baseName",
+          "line": 1189,
+          "message": "Missing documentation for parameter \"baseName\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "argument",
+          "line": 1411,
+          "message": "Missing documentation for parameter \"argument\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "value",
+          "line": 1411,
+          "message": "Missing documentation for parameter \"value\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "previous",
+          "line": 1411,
+          "message": "Missing documentation for parameter \"previous\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "arg",
+          "line": 1736,
+          "message": "Missing documentation for parameter \"arg\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "optionKey",
+          "line": 1958,
+          "message": "Missing documentation for parameter \"optionKey\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "option",
+          "line": 2033,
+          "message": "Missing documentation for parameter \"option\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "option",
+          "line": 2053,
+          "message": "Missing documentation for parameter \"option\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "str",
+          "line": 2381,
+          "message": "Missing documentation for parameter \"str\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "args",
+          "line": 2590,
+          "message": "Missing documentation for parameter \"args\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "listener",
+            "line": 541,
+            "message": "Missing documentation for function \"listener\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"listener\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "knownBy",
+            "line": 628,
+            "message": "Missing documentation for function \"knownBy\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"knownBy\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "handleOptionValue",
+            "line": 674,
+            "message": "Missing documentation for function \"handleOptionValue\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"handleOptionValue\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "findFile",
+            "line": 1189,
+            "message": "Missing documentation for function \"findFile\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"findFile\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "incomplete-function-doc",
+            "name": "myParseArg",
+            "line": 1411,
+            "message": "Incomplete documentation for function \"myParseArg\""
+          },
+          "suggestion": "Add missing JSDoc tags (@param, @returns, @throws as appropriate)"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "checkForUnknownOptions",
+            "line": 1572,
+            "message": "Missing documentation for function \"checkForUnknownOptions\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"checkForUnknownOptions\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "maybeOption",
+            "line": 1736,
+            "message": "Missing documentation for function \"maybeOption\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"maybeOption\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "incomplete-function-doc",
+            "name": "hasCustomOptionValue",
+            "line": 1958,
+            "message": "Incomplete documentation for function \"hasCustomOptionValue\""
+          },
+          "suggestion": "Add missing JSDoc tags (@param, @returns, @throws as appropriate)"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "findBestOptionFromValue",
+            "line": 2033,
+            "message": "Missing documentation for function \"findBestOptionFromValue\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"findBestOptionFromValue\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "getErrorMessage",
+            "line": 2053,
+            "message": "Missing documentation for function \"getErrorMessage\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"getErrorMessage\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "write",
+            "line": 2381,
+            "message": "Missing documentation for function \"write\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"write\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "incrementNodeInspectorPort",
+            "line": 2590,
+            "message": "Missing documentation for function \"incrementNodeInspectorPort\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"incrementNodeInspectorPort\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Command",
+            "line": 13,
+            "message": "Missing documentation for class \"Command\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Command\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "args",
+            "line": 541,
+            "message": "Missing documentation for parameter \"args\""
+          },
+          "suggestion": "Add @param tag for parameter \"args\":\n * @param {Type} args - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "option.short && this._findOption(option.short",
+            "line": 604,
+            "message": "Missing documentation for parameter \"option.short && this._findOption(option.short\""
+          },
+          "suggestion": "Add @param tag for parameter \"option.short && this._findOption(option.short\":\n * @param {Type} option.short && this._findOption(option.short - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "cmd",
+            "line": 628,
+            "message": "Missing documentation for parameter \"cmd\""
+          },
+          "suggestion": "Add @param tag for parameter \"cmd\":\n * @param {Type} cmd - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "val",
+            "line": 674,
+            "message": "Missing documentation for parameter \"val\""
+          },
+          "suggestion": "Add @param tag for parameter \"val\":\n * @param {Type} val - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "invalidValueMessage",
+            "line": 674,
+            "message": "Missing documentation for parameter \"invalidValueMessage\""
+          },
+          "suggestion": "Add @param tag for parameter \"invalidValueMessage\":\n * @param {Type} invalidValueMessage - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "valueSource",
+            "line": 674,
+            "message": "Missing documentation for parameter \"valueSource\""
+          },
+          "suggestion": "Add @param tag for parameter \"valueSource\":\n * @param {Type} valueSource - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "baseDir",
+            "line": 1189,
+            "message": "Missing documentation for parameter \"baseDir\""
+          },
+          "suggestion": "Add @param tag for parameter \"baseDir\":\n * @param {Type} baseDir - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "baseName",
+            "line": 1189,
+            "message": "Missing documentation for parameter \"baseName\""
+          },
+          "suggestion": "Add @param tag for parameter \"baseName\":\n * @param {Type} baseName - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "argument",
+            "line": 1411,
+            "message": "Missing documentation for parameter \"argument\""
+          },
+          "suggestion": "Add @param tag for parameter \"argument\":\n * @param {Type} argument - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "value",
+            "line": 1411,
+            "message": "Missing documentation for parameter \"value\""
+          },
+          "suggestion": "Add @param tag for parameter \"value\":\n * @param {Type} value - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "previous",
+            "line": 1411,
+            "message": "Missing documentation for parameter \"previous\""
+          },
+          "suggestion": "Add @param tag for parameter \"previous\":\n * @param {Type} previous - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "arg",
+            "line": 1736,
+            "message": "Missing documentation for parameter \"arg\""
+          },
+          "suggestion": "Add @param tag for parameter \"arg\":\n * @param {Type} arg - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "optionKey",
+            "line": 1958,
+            "message": "Missing documentation for parameter \"optionKey\""
+          },
+          "suggestion": "Add @param tag for parameter \"optionKey\":\n * @param {Type} optionKey - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "option",
+            "line": 2033,
+            "message": "Missing documentation for parameter \"option\""
+          },
+          "suggestion": "Add @param tag for parameter \"option\":\n * @param {Type} option - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "option",
+            "line": 2053,
+            "message": "Missing documentation for parameter \"option\""
+          },
+          "suggestion": "Add @param tag for parameter \"option\":\n * @param {Type} option - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "str",
+            "line": 2381,
+            "message": "Missing documentation for parameter \"str\""
+          },
+          "suggestion": "Add @param tag for parameter \"str\":\n * @param {Type} str - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "args",
+            "line": 2590,
+            "message": "Missing documentation for parameter \"args\""
+          },
+          "suggestion": "Add @param tag for parameter \"args\":\n * @param {Type} args - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/lib/error.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/lib/help.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "callFormatItem",
+          "line": 403,
+          "message": "Missing documentation for function \"callFormatItem\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "or",
+          "line": 11,
+          "message": "Missing documentation for class \"or\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "Help",
+          "line": 12,
+          "message": "Missing documentation for class \"Help\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "option",
+          "line": 63,
+          "message": "Missing documentation for parameter \"option\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "term",
+          "line": 403,
+          "message": "Missing documentation for parameter \"term\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "description",
+          "line": 403,
+          "message": "Missing documentation for parameter \"description\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "str",
+          "line": 702,
+          "message": "Missing documentation for parameter \"str\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "callFormatItem",
+            "line": 403,
+            "message": "Missing documentation for function \"callFormatItem\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"callFormatItem\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "or",
+            "line": 11,
+            "message": "Missing documentation for class \"or\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"or\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Help",
+            "line": 12,
+            "message": "Missing documentation for class \"Help\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Help\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "option",
+            "line": 63,
+            "message": "Missing documentation for parameter \"option\""
+          },
+          "suggestion": "Add @param tag for parameter \"option\":\n * @param {Type} option - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "term",
+            "line": 403,
+            "message": "Missing documentation for parameter \"term\""
+          },
+          "suggestion": "Add @param tag for parameter \"term\":\n * @param {Type} term - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "description",
+            "line": 403,
+            "message": "Missing documentation for parameter \"description\""
+          },
+          "suggestion": "Add @param tag for parameter \"description\":\n * @param {Type} description - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "str",
+            "line": 702,
+            "message": "Missing documentation for parameter \"str\""
+          },
+          "suggestion": "Add @param tag for parameter \"str\":\n * @param {Type} str - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/lib/option.js",
+      "issues": [
+        {
+          "type": "incomplete-function-doc",
+          "name": "splitOptionFlags",
+          "line": 315,
+          "message": "Incomplete documentation for function \"splitOptionFlags\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "Option",
+          "line": 3,
+          "message": "Missing documentation for class \"Option\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "DualOptions",
+          "line": 255,
+          "message": "Missing documentation for class \"DualOptions\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "str",
+          "line": 303,
+          "message": "Missing documentation for parameter \"str\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "flags",
+          "line": 315,
+          "message": "Missing documentation for parameter \"flags\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "incomplete-function-doc",
+            "name": "splitOptionFlags",
+            "line": 315,
+            "message": "Incomplete documentation for function \"splitOptionFlags\""
+          },
+          "suggestion": "Add missing JSDoc tags (@param, @returns, @throws as appropriate)"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Option",
+            "line": 3,
+            "message": "Missing documentation for class \"Option\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Option\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "DualOptions",
+            "line": 255,
+            "message": "Missing documentation for class \"DualOptions\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"DualOptions\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "str",
+            "line": 303,
+            "message": "Missing documentation for parameter \"str\""
+          },
+          "suggestion": "Add @param tag for parameter \"str\":\n * @param {Type} str - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "flags",
+            "line": 315,
+            "message": "Missing documentation for parameter \"flags\""
+          },
+          "suggestion": "Add @param tag for parameter \"flags\":\n * @param {Type} flags - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/lib/suggestSimilar.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "editDistance",
+          "line": 3,
+          "message": "Missing documentation for function \"editDistance\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "similarity",
+          "line": 75,
+          "message": "Missing documentation for function \"similarity\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "a",
+          "line": 3,
+          "message": "Missing documentation for parameter \"a\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "b",
+          "line": 3,
+          "message": "Missing documentation for parameter \"b\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "word",
+          "line": 56,
+          "message": "Missing documentation for parameter \"word\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "candidates",
+          "line": 56,
+          "message": "Missing documentation for parameter \"candidates\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "length - distance",
+          "line": 75,
+          "message": "Missing documentation for parameter \"length - distance\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "editDistance",
+            "line": 3,
+            "message": "Missing documentation for function \"editDistance\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"editDistance\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "similarity",
+            "line": 75,
+            "message": "Missing documentation for function \"similarity\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"similarity\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "a",
+            "line": 3,
+            "message": "Missing documentation for parameter \"a\""
+          },
+          "suggestion": "Add @param tag for parameter \"a\":\n * @param {Type} a - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "b",
+            "line": 3,
+            "message": "Missing documentation for parameter \"b\""
+          },
+          "suggestion": "Add @param tag for parameter \"b\":\n * @param {Type} b - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "word",
+            "line": 56,
+            "message": "Missing documentation for parameter \"word\""
+          },
+          "suggestion": "Add @param tag for parameter \"word\":\n * @param {Type} word - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "candidates",
+            "line": 56,
+            "message": "Missing documentation for parameter \"candidates\""
+          },
+          "suggestion": "Add @param tag for parameter \"candidates\":\n * @param {Type} candidates - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "length - distance",
+            "line": 75,
+            "message": "Missing documentation for parameter \"length - distance\""
+          },
+          "suggestion": "Add @param tag for parameter \"length - distance\":\n * @param {Type} length - distance - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/node_modules/commander/typings/index.d.ts",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "createCommand",
+          "line": 1041,
+          "message": "Missing documentation for function \"createCommand\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "createOption",
+          "line": 1042,
+          "message": "Missing documentation for function \"createOption\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "createArgument",
+          "line": 1043,
+          "message": "Missing documentation for function \"createArgument\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "CommanderError",
+          "line": 16,
+          "message": "Missing documentation for class \"CommanderError\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "InvalidArgumentError",
+          "line": 31,
+          "message": "Missing documentation for class \"InvalidArgumentError\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "Command",
+          "line": 355,
+          "message": "Missing documentation for class \"Command\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "name?: string",
+          "line": 1041,
+          "message": "Missing documentation for parameter \"name?: string\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "flags: string",
+          "line": 1042,
+          "message": "Missing documentation for parameter \"flags: string\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "description?: string",
+          "line": 1042,
+          "message": "Missing documentation for parameter \"description?: string\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "name: string",
+          "line": 1043,
+          "message": "Missing documentation for parameter \"name: string\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "description?: string",
+          "line": 1043,
+          "message": "Missing documentation for parameter \"description?: string\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "createCommand",
+            "line": 1041,
+            "message": "Missing documentation for function \"createCommand\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"createCommand\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "createOption",
+            "line": 1042,
+            "message": "Missing documentation for function \"createOption\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"createOption\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "createArgument",
+            "line": 1043,
+            "message": "Missing documentation for function \"createArgument\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"createArgument\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "CommanderError",
+            "line": 16,
+            "message": "Missing documentation for class \"CommanderError\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"CommanderError\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "InvalidArgumentError",
+            "line": 31,
+            "message": "Missing documentation for class \"InvalidArgumentError\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"InvalidArgumentError\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "Command",
+            "line": 355,
+            "message": "Missing documentation for class \"Command\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"Command\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "name?: string",
+            "line": 1041,
+            "message": "Missing documentation for parameter \"name?: string\""
+          },
+          "suggestion": "Add @param tag for parameter \"name?: string\":\n * @param {Type} name?: string - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "flags: string",
+            "line": 1042,
+            "message": "Missing documentation for parameter \"flags: string\""
+          },
+          "suggestion": "Add @param tag for parameter \"flags: string\":\n * @param {Type} flags: string - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "description?: string",
+            "line": 1042,
+            "message": "Missing documentation for parameter \"description?: string\""
+          },
+          "suggestion": "Add @param tag for parameter \"description?: string\":\n * @param {Type} description?: string - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "name: string",
+            "line": 1043,
+            "message": "Missing documentation for parameter \"name: string\""
+          },
+          "suggestion": "Add @param tag for parameter \"name: string\":\n * @param {Type} name: string - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "description?: string",
+            "line": 1043,
+            "message": "Missing documentation for parameter \"description?: string\""
+          },
+          "suggestion": "Add @param tag for parameter \"description?: string\":\n * @param {Type} description?: string - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/auth.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/emailRoutes.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/health.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/notificationRoutes.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/roleRoutes.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/tenantRoutes.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/routes/userRoutes.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/sdk/src/types.ts",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/emailQueueService.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "getAnalytics",
+          "line": 76,
+          "message": "Missing documentation for function \"getAnalytics\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "trackDelivery",
+          "line": 78,
+          "message": "Missing documentation for function \"trackDelivery\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "trackOpen",
+          "line": 85,
+          "message": "Missing documentation for function \"trackOpen\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "trackClick",
+          "line": 92,
+          "message": "Missing documentation for function \"trackClick\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "trackingId",
+          "line": 78,
+          "message": "Missing documentation for parameter \"trackingId\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "trackingId",
+          "line": 85,
+          "message": "Missing documentation for parameter \"trackingId\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "trackingId",
+          "line": 92,
+          "message": "Missing documentation for parameter \"trackingId\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "getAnalytics",
+            "line": 76,
+            "message": "Missing documentation for function \"getAnalytics\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"getAnalytics\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "trackDelivery",
+            "line": 78,
+            "message": "Missing documentation for function \"trackDelivery\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"trackDelivery\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "trackOpen",
+            "line": 85,
+            "message": "Missing documentation for function \"trackOpen\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"trackOpen\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "trackClick",
+            "line": 92,
+            "message": "Missing documentation for function \"trackClick\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"trackClick\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "trackingId",
+            "line": 78,
+            "message": "Missing documentation for parameter \"trackingId\""
+          },
+          "suggestion": "Add @param tag for parameter \"trackingId\":\n * @param {Type} trackingId - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "trackingId",
+            "line": 85,
+            "message": "Missing documentation for parameter \"trackingId\""
+          },
+          "suggestion": "Add @param tag for parameter \"trackingId\":\n * @param {Type} trackingId - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "trackingId",
+            "line": 92,
+            "message": "Missing documentation for parameter \"trackingId\""
+          },
+          "suggestion": "Add @param tag for parameter \"trackingId\":\n * @param {Type} trackingId - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/emailService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "EmailService",
+          "line": 36,
+          "message": "Missing documentation for class \"EmailService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "EmailService",
+            "line": 36,
+            "message": "Missing documentation for class \"EmailService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"EmailService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/fallbackCache.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "value",
+          "line": 26,
+          "message": "Missing documentation for function \"value\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "FallbackCache",
+          "line": 3,
+          "message": "Missing documentation for class \"FallbackCache\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "this.cache.get(key",
+          "line": 26,
+          "message": "Missing documentation for parameter \"this.cache.get(key\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "value",
+            "line": 26,
+            "message": "Missing documentation for function \"value\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"value\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "FallbackCache",
+            "line": 3,
+            "message": "Missing documentation for class \"FallbackCache\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"FallbackCache\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "this.cache.get(key",
+            "line": 26,
+            "message": "Missing documentation for parameter \"this.cache.get(key\""
+          },
+          "suggestion": "Add @param tag for parameter \"this.cache.get(key\":\n * @param {Type} this.cache.get(key - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/notificationService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "NotificationService",
+          "line": 4,
+          "message": "Missing documentation for class \"NotificationService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "NotificationService",
+            "line": 4,
+            "message": "Missing documentation for class \"NotificationService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"NotificationService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/passKeyService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "PassKeyService",
+          "line": 15,
+          "message": "Missing documentation for class \"PassKeyService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "PassKeyService",
+            "line": 15,
+            "message": "Missing documentation for class \"PassKeyService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"PassKeyService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/roleService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "RoleService",
+          "line": 6,
+          "message": "Missing documentation for class \"RoleService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "RoleService",
+            "line": 6,
+            "message": "Missing documentation for class \"RoleService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"RoleService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/securityAuditService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "SecurityAuditService",
+          "line": 4,
+          "message": "Missing documentation for class \"SecurityAuditService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "SecurityAuditService",
+            "line": 4,
+            "message": "Missing documentation for class \"SecurityAuditService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"SecurityAuditService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/slackService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "SlackService",
+          "line": 4,
+          "message": "Missing documentation for class \"SlackService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "SlackService",
+            "line": 4,
+            "message": "Missing documentation for class \"SlackService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"SlackService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/tenantConfigService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "TenantConfigService",
+          "line": 3,
+          "message": "Missing documentation for class \"TenantConfigService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "TenantConfigService",
+            "line": 3,
+            "message": "Missing documentation for class \"TenantConfigService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"TenantConfigService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/tenantOnboardingService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "TenantOnboardingService",
+          "line": 4,
+          "message": "Missing documentation for class \"TenantOnboardingService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "TenantOnboardingService",
+            "line": 4,
+            "message": "Missing documentation for class \"TenantOnboardingService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"TenantOnboardingService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/tenantService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "TenantService",
+          "line": 3,
+          "message": "Missing documentation for class \"TenantService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "TenantService",
+            "line": 3,
+            "message": "Missing documentation for class \"TenantService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"TenantService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/tokenIntrospectionService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "TokenIntrospectionService",
+          "line": 5,
+          "message": "Missing documentation for class \"TokenIntrospectionService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "TokenIntrospectionService",
+            "line": 5,
+            "message": "Missing documentation for class \"TokenIntrospectionService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"TokenIntrospectionService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/services/twoFactorService.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "TwoFactorService",
+          "line": 10,
+          "message": "Missing documentation for class \"TwoFactorService\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "TwoFactorService",
+            "line": 10,
+            "message": "Missing documentation for class \"TwoFactorService\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"TwoFactorService\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/tests/integration/user.test.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/tests/testHelpers.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/tests/unit/userController.test.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/types/index.d.ts",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/utils/docAnalyzer.js",
+      "issues": [
+        {
+          "type": "missing-class-doc",
+          "name": "DocAnalyzer",
+          "line": 5,
+          "message": "Missing documentation for class \"DocAnalyzer\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "documentation",
+          "line": 25,
+          "message": "Missing documentation for class \"documentation\""
+        },
+        {
+          "type": "missing-class-doc",
+          "name": "declarations",
+          "line": 80,
+          "message": "Missing documentation for class \"declarations\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "DocAnalyzer",
+            "line": 5,
+            "message": "Missing documentation for class \"DocAnalyzer\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"DocAnalyzer\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "documentation",
+            "line": 25,
+            "message": "Missing documentation for class \"documentation\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"documentation\":\n/**\n * Description of the class purpose\n * @class\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-class-doc",
+            "name": "declarations",
+            "line": 80,
+            "message": "Missing documentation for class \"declarations\""
+          },
+          "suggestion": "Add JSDoc comment block for class \"declarations\":\n/**\n * Description of the class purpose\n * @class\n */"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/utils/ipUtils.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "isValidIP",
+          "line": 3,
+          "message": "Missing documentation for function \"isValidIP\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "isValidCIDR",
+          "line": 34,
+          "message": "Missing documentation for function \"isValidCIDR\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "isIPInRange",
+          "line": 59,
+          "message": "Missing documentation for function \"isIPInRange\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "normalizeIP",
+          "line": 69,
+          "message": "Missing documentation for function \"normalizeIP\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "ip",
+          "line": 3,
+          "message": "Missing documentation for parameter \"ip\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "range",
+          "line": 34,
+          "message": "Missing documentation for parameter \"range\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "ip",
+          "line": 59,
+          "message": "Missing documentation for parameter \"ip\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "range",
+          "line": 59,
+          "message": "Missing documentation for parameter \"range\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "ip",
+          "line": 69,
+          "message": "Missing documentation for parameter \"ip\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "isValidIP",
+            "line": 3,
+            "message": "Missing documentation for function \"isValidIP\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"isValidIP\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "isValidCIDR",
+            "line": 34,
+            "message": "Missing documentation for function \"isValidCIDR\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"isValidCIDR\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "isIPInRange",
+            "line": 59,
+            "message": "Missing documentation for function \"isIPInRange\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"isIPInRange\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "normalizeIP",
+            "line": 69,
+            "message": "Missing documentation for function \"normalizeIP\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"normalizeIP\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "ip",
+            "line": 3,
+            "message": "Missing documentation for parameter \"ip\""
+          },
+          "suggestion": "Add @param tag for parameter \"ip\":\n * @param {Type} ip - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "range",
+            "line": 34,
+            "message": "Missing documentation for parameter \"range\""
+          },
+          "suggestion": "Add @param tag for parameter \"range\":\n * @param {Type} range - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "ip",
+            "line": 59,
+            "message": "Missing documentation for parameter \"ip\""
+          },
+          "suggestion": "Add @param tag for parameter \"ip\":\n * @param {Type} ip - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "range",
+            "line": 59,
+            "message": "Missing documentation for parameter \"range\""
+          },
+          "suggestion": "Add @param tag for parameter \"range\":\n * @param {Type} range - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "ip",
+            "line": 69,
+            "message": "Missing documentation for parameter \"ip\""
+          },
+          "suggestion": "Add @param tag for parameter \"ip\":\n * @param {Type} ip - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/utils/pkce.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "base64URLEncode",
+          "line": 3,
+          "message": "Missing documentation for function \"base64URLEncode\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "generateCodeVerifier",
+          "line": 11,
+          "message": "Missing documentation for function \"generateCodeVerifier\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "generateCodeChallenge",
+          "line": 15,
+          "message": "Missing documentation for function \"generateCodeChallenge\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "str",
+          "line": 3,
+          "message": "Missing documentation for parameter \"str\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "verifier",
+          "line": 15,
+          "message": "Missing documentation for parameter \"verifier\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "base64URLEncode",
+            "line": 3,
+            "message": "Missing documentation for function \"base64URLEncode\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"base64URLEncode\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "generateCodeVerifier",
+            "line": 11,
+            "message": "Missing documentation for function \"generateCodeVerifier\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"generateCodeVerifier\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "generateCodeChallenge",
+            "line": 15,
+            "message": "Missing documentation for function \"generateCodeChallenge\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"generateCodeChallenge\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "str",
+            "line": 3,
+            "message": "Missing documentation for parameter \"str\""
+          },
+          "suggestion": "Add @param tag for parameter \"str\":\n * @param {Type} str - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "verifier",
+            "line": 15,
+            "message": "Missing documentation for parameter \"verifier\""
+          },
+          "suggestion": "Add @param tag for parameter \"verifier\":\n * @param {Type} verifier - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/utils/sanitize.js",
+      "issues": [
+        {
+          "type": "missing-function-doc",
+          "name": "sanitizeHtmlContent",
+          "line": 48,
+          "message": "Missing documentation for function \"sanitizeHtmlContent\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "sanitizeObject",
+          "line": 60,
+          "message": "Missing documentation for function \"sanitizeObject\""
+        },
+        {
+          "type": "missing-function-doc",
+          "name": "validateContentSecurityPolicy",
+          "line": 98,
+          "message": "Missing documentation for function \"validateContentSecurityPolicy\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "html",
+          "line": 48,
+          "message": "Missing documentation for parameter \"html\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "obj",
+          "line": 60,
+          "message": "Missing documentation for parameter \"obj\""
+        },
+        {
+          "type": "missing-param-doc",
+          "name": "content",
+          "line": 98,
+          "message": "Missing documentation for parameter \"content\""
+        }
+      ],
+      "suggestions": [
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "sanitizeHtmlContent",
+            "line": 48,
+            "message": "Missing documentation for function \"sanitizeHtmlContent\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"sanitizeHtmlContent\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "sanitizeObject",
+            "line": 60,
+            "message": "Missing documentation for function \"sanitizeObject\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"sanitizeObject\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-function-doc",
+            "name": "validateContentSecurityPolicy",
+            "line": 98,
+            "message": "Missing documentation for function \"validateContentSecurityPolicy\""
+          },
+          "suggestion": "Add JSDoc comment block for function \"validateContentSecurityPolicy\":\n/**\n * Description of what the function does\n * @param {Type} paramName - Parameter description\n * @returns {Type} Description of return value\n */"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "html",
+            "line": 48,
+            "message": "Missing documentation for parameter \"html\""
+          },
+          "suggestion": "Add @param tag for parameter \"html\":\n * @param {Type} html - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "obj",
+            "line": 60,
+            "message": "Missing documentation for parameter \"obj\""
+          },
+          "suggestion": "Add @param tag for parameter \"obj\":\n * @param {Type} obj - Parameter description"
+        },
+        {
+          "issue": {
+            "type": "missing-param-doc",
+            "name": "content",
+            "line": 98,
+            "message": "Missing documentation for parameter \"content\""
+          },
+          "suggestion": "Add @param tag for parameter \"content\":\n * @param {Type} content - Parameter description"
+        }
+      ]
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/validations/roleValidations.js",
+      "issues": [],
+      "suggestions": []
+    },
+    {
+      "path": "/Users/nevillewoller/Development/VenueLog/node-auth/src/validations/userValidations.js",
+      "issues": [],
+      "suggestions": []
+    }
+  ]
+}
