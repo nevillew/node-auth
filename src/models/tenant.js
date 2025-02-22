@@ -60,9 +60,42 @@ module.exports = (sequelize, DataTypes) => {
         },
         ipRestrictions: {
           enabled: false,
-          allowedIPs: [],
-          allowedRanges: [],
-          blockList: []
+          allowedIPs: {
+            type: DataTypes.ARRAY(DataTypes.STRING),
+            defaultValue: [],
+            validate: {
+              isValidIPs(value) {
+                if (!Array.isArray(value)) throw new Error('Must be an array');
+                value.forEach(ip => {
+                  if (!isValidIP(ip)) throw new Error(`Invalid IP address: ${ip}`);
+                });
+              }
+            }
+          },
+          allowedRanges: {
+            type: DataTypes.ARRAY(DataTypes.STRING),
+            defaultValue: [],
+            validate: {
+              isValidCIDR(value) {
+                if (!Array.isArray(value)) throw new Error('Must be an array');
+                value.forEach(range => {
+                  if (!isValidCIDR(range)) throw new Error(`Invalid CIDR range: ${range}`);
+                });
+              }
+            }
+          },
+          blockList: {
+            type: DataTypes.ARRAY(DataTypes.STRING),
+            defaultValue: [],
+            validate: {
+              isValidIPs(value) {
+                if (!Array.isArray(value)) throw new Error('Must be an array');
+                value.forEach(ip => {
+                  if (!isValidIP(ip)) throw new Error(`Invalid IP address: ${ip}`);
+                });
+              }
+            }
+          }
         },
         session: {
           maxConcurrentSessions: 3,
