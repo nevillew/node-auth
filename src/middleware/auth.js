@@ -6,7 +6,26 @@ const authenticateHandler = async (req, res, next) => {
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
 
-    const token = await oauth2Server.authenticate(request, response);
+    let token = await oauth2Server.authenticate(request, response);
+    
+    // Handle impersonation tokens
+    if (token.impersonatorId) {
+      // Verify impersonator still has permission
+      const impersonator = await User.findByPk(token.impersonatorId, {
+        include: [Role]
+      });
+      
+      const hasPermission = impersonator.roles.some(role => 
+        role.permissions.includes('impersonate')
+      );
+      
+      if (!hasPermission) {
+        throw new Error('Impersonation permission revoked');
+      }
+
+      // Add impersonator info to request
+      req.impersonator = impersonator;
+    }
     
     // Check if token is revoked and has required scopes
     const tokenRecord = await OAuthToken.findOne({

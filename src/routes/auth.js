@@ -285,6 +285,83 @@ router.post('/refresh', tokenHandler, (req, res) => {
   res.json(res.locals.oauth.token);
 });
 
+// Impersonation endpoints
+router.post('/impersonate/start', authenticateHandler, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    // Verify impersonator has permission
+    const hasPermission = req.user.roles.some(role => 
+      role.permissions.includes('impersonate')
+    );
+    
+    if (!hasPermission) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    // Get target user
+    const targetUser = await User.findByPk(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate impersonation token
+    const token = jwt.sign(
+      { 
+        id: targetUser.id,
+        impersonatorId: req.user.id 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Create audit log
+    await SecurityAuditLog.create({
+      userId: req.user.id,
+      event: 'IMPERSONATION_STARTED',
+      details: {
+        targetUserId: targetUser.id,
+        targetEmail: targetUser.email
+      },
+      severity: 'high'
+    });
+
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/impersonate/stop', authenticateHandler, async (req, res) => {
+  try {
+    if (!req.token.impersonatorId) {
+      return res.status(400).json({ error: 'Not in impersonation mode' });
+    }
+
+    // Generate new token for original user
+    const token = jwt.sign(
+      { id: req.token.impersonatorId },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Create audit log
+    await SecurityAuditLog.create({
+      userId: req.token.impersonatorId,
+      event: 'IMPERSONATION_ENDED',
+      details: {
+        targetUserId: req.user.id,
+        targetEmail: req.user.email
+      },
+      severity: 'high'
+    });
+
+    res.json({ token });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Logout endpoint
 router.post('/logout', authenticateHandler, async (req, res) => {
   try {
