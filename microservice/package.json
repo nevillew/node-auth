@@ -22,7 +22,11 @@
     "hpp": "^0.2.3",
     "joi": "^17.12.1",
     "rate-limit-redis": "^4.2.0",
-    "express-rate-limit": "^7.1.5"
+    "express-rate-limit": "^7.1.5",
+    "nodemailer": "^6.9.9",
+    "nodemailer-mailgun-transport": "^2.1.5",
+    "handlebars": "^4.7.8",
+    "email-templates": "^11.1.1"
   },
   "devDependencies": {
     "jest": "^29.7.0",
