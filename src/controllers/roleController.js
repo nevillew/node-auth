@@ -188,7 +188,17 @@ class RoleController {
   async delete(req, res) {
     const t = await sequelize.transaction();
     try {
-      const role = await Role.findByPk(req.params.id, { transaction: t });
+      const { confirm = false } = req.body;
+      const role = await Role.findByPk(req.params.id, {
+        include: [
+          {
+            model: User,
+            attributes: ['id', 'email', 'name']
+          },
+          Permission
+        ],
+        transaction: t
+      });
 
       if (!role) {
         await t.rollback();
@@ -201,12 +211,43 @@ class RoleController {
       }
 
       // Check if role has any users
-      const userCount = await role.countUsers({ transaction: t });
-      if (userCount > 0) {
-        await t.rollback();
-        throw new AppError('Cannot delete role with assigned users', 400);
+      if (role.Users.length > 0) {
+        if (!confirm) {
+          await t.rollback();
+          return res.status(409).json({
+            error: 'Role has assigned users',
+            requiresConfirmation: true,
+            affectedUsers: role.Users.length,
+            users: role.Users.map(u => ({
+              id: u.id,
+              email: u.email,
+              name: u.name
+            }))
+          });
+        }
+
+        // Notify affected users before deletion
+        await Promise.all(role.Users.map(user =>
+          notificationService.sendSystemNotification(
+            user.id,
+            `The role "${role.name}" you were assigned to has been deleted by ${req.user.name}`
+          )
+        ));
       }
 
+      // Remove role permissions
+      await RolePermission.destroy({
+        where: { roleId: role.id },
+        transaction: t
+      });
+
+      // Remove role from users
+      await UserRole.destroy({
+        where: { roleId: role.id },
+        transaction: t
+      });
+
+      // Delete the role
       await role.destroy({ transaction: t });
 
       // Create audit log
@@ -215,7 +256,9 @@ class RoleController {
         event: 'ROLE_DELETED',
         details: {
           roleId: role.id,
-          name: role.name
+          name: role.name,
+          permissions: role.Permissions.map(p => p.name),
+          affectedUsers: role.Users.length
         },
         severity: 'high'
       }, { transaction: t });
