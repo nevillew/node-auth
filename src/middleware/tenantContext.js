@@ -41,17 +41,55 @@ module.exports = async (req, res, next) => {
       const clientIP = req.ip || req.connection.remoteAddress;
       const { allowedIPs, allowedRanges, blockList } = tenant.securityPolicy.ipRestrictions;
 
+      // Check block list first
       if (blockList.includes(clientIP)) {
+        await SecurityAuditLog.create({
+          userId: req.user?.id,
+          event: 'IP_ACCESS_BLOCKED',
+          severity: 'high',
+          details: {
+            ip: clientIP,
+            tenantId,
+            reason: 'IP in block list'
+          }
+        });
         logger.warn('Blocked IP attempt', { ip: clientIP, tenantId });
         return res.status(403).json({ error: 'IP address is blocked' });
       }
 
+      // Check if IP is explicitly allowed or in allowed ranges
       const isAllowed = allowedIPs.includes(clientIP) || 
                        allowedRanges.some(range => isIPInRange(clientIP, range));
 
       if (!isAllowed) {
+        await SecurityAuditLog.create({
+          userId: req.user?.id,
+          event: 'IP_ACCESS_DENIED',
+          severity: 'medium',
+          details: {
+            ip: clientIP,
+            tenantId,
+            reason: 'IP not in allowed list'
+          }
+        });
         logger.warn('Unauthorized IP attempt', { ip: clientIP, tenantId });
         return res.status(403).json({ error: 'IP address not allowed' });
+      }
+
+      // Log successful access from new IP
+      const cacheKey = `ip:${clientIP}:tenant:${tenantId}`;
+      const cached = await redisClient.get(cacheKey);
+      if (!cached) {
+        await SecurityAuditLog.create({
+          userId: req.user?.id,
+          event: 'NEW_IP_ACCESS',
+          severity: 'low',
+          details: {
+            ip: clientIP,
+            tenantId
+          }
+        });
+        await redisClient.set(cacheKey, '1', { EX: 86400 }); // Cache for 24 hours
       }
     }
 
