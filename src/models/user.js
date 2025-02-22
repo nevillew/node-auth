@@ -48,6 +48,16 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },
+    emailVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    verificationToken: DataTypes.STRING,
+    verificationTokenExpires: DataTypes.DATE,
+    resetToken: DataTypes.STRING,
+    resetTokenExpires: DataTypes.DATE,
+    preferences: DataTypes.JSON,
+    lastActivity: DataTypes.DATE,
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE
   }, {

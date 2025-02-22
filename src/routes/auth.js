@@ -2,8 +2,21 @@ const express = require('express');
 const passport = require('passport');
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 const { tokenHandler } = require('../middleware/auth');
 const { User } = require('../models');
+
+// Email transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: process.env.EMAIL_SECURE === 'true',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
 const router = express.Router();
 
 // Local authentication
@@ -104,6 +117,150 @@ router.post('/2fa/login', async (req, res) => {
   // Generate and return token
   const authToken = generateToken(user);
   res.json({ token: authToken });
+});
+
+// Email verification
+router.post('/verify-email', async (req, res) => {
+  const { email } = req.body;
+  
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    await user.update({
+      verificationToken: token,
+      verificationTokenExpires: expires
+    });
+
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: user.email,
+      subject: 'Verify your email address',
+      html: `Please click this link to verify your email: <a href="${verificationUrl}">${verificationUrl}</a>`
+    });
+
+    res.json({ message: 'Verification email sent' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete email verification
+router.post('/verify-email/confirm', async (req, res) => {
+  const { token } = req.body;
+  
+  try {
+    const user = await User.findOne({ 
+      where: { 
+        verificationToken: token,
+        verificationTokenExpires: { [Sequelize.Op.gt]: new Date() }
+      }
+    });
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+
+    await user.update({
+      emailVerified: true,
+      verificationToken: null,
+      verificationTokenExpires: null
+    });
+
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Password reset request
+router.post('/reset-password', async (req, res) => {
+  const { email } = req.body;
+  
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await user.update({
+      resetToken: token,
+      resetTokenExpires: expires
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: user.email,
+      subject: 'Password Reset Request',
+      html: `Please click this link to reset your password: <a href="${resetUrl}">${resetUrl}</a>`
+    });
+
+    res.json({ message: 'Password reset email sent' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete password reset
+router.post('/reset-password/confirm', async (req, res) => {
+  const { token, password } = req.body;
+  
+  try {
+    const user = await User.findOne({ 
+      where: { 
+        resetToken: token,
+        resetTokenExpires: { [Sequelize.Op.gt]: new Date() }
+      }
+    });
+
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    await user.update({
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpires: null
+    });
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user preferences
+router.put('/preferences', authenticateHandler, async (req, res) => {
+  try {
+    const { preferences } = req.body;
+    const user = await User.findByPk(req.user.id);
+    
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await user.update({ preferences });
+    res.json({ message: 'Preferences updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Track user activity
+router.use(authenticateHandler, async (req, res, next) => {
+  try {
+    await User.update(
+      { lastActivity: new Date() },
+      { where: { id: req.user.id } }
+    );
+  } catch (error) {
+    console.error('Activity tracking error:', error);
+  }
+  next();
 });
 
 module.exports = router;
