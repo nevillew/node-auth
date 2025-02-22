@@ -44,32 +44,64 @@ const generateCsrfToken = (req, res, next) => {
 };
 
 // Validate CSRF token middleware
+const crypto = require('crypto');
+
 const validateCsrfToken = (req, res, next) => {
   // Skip CSRF for GET/HEAD/OPTIONS requests
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
 
-  // Get token from request
-  const token = req.headers['x-csrf-token'] || req.body._csrf;
+  // Get tokens from request
+  const requestToken = req.headers['x-csrf-token'] || req.body._csrf;
+  const cookieToken = req.cookies['XSRF-TOKEN'];
   
-  if (!token) {
+  if (!requestToken || !cookieToken) {
     logger.warn('CSRF token missing', { 
       url: req.originalUrl,
-      method: req.method 
+      method: req.method,
+      hasRequestToken: !!requestToken,
+      hasCookieToken: !!cookieToken
     });
     throw new AppError('CSRF token missing', 403);
   }
 
-  // Verify token matches
-  if (token !== req.csrfToken) {
+  // Use timing-safe comparison
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(requestToken),
+    Buffer.from(cookieToken)
+  );
+
+  if (!isValid) {
     logger.warn('CSRF token mismatch', { 
       url: req.originalUrl,
       method: req.method 
     });
+    
+    // Create security audit log
+    SecurityAuditLog.create({
+      userId: req.user?.id,
+      event: 'CSRF_VALIDATION_FAILED',
+      details: {
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip
+      },
+      severity: 'high'
+    });
+
     throw new AppError('CSRF token invalid', 403);
   }
 
+  // Rotate token after successful validation
+  const newToken = crypto.randomBytes(32).toString('hex');
+  res.cookie('XSRF-TOKEN', newToken, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 60 * 60 * 1000 // 1 hour
+  });
+  
   next();
 };
 

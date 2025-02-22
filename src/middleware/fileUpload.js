@@ -86,13 +86,27 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
+const rateLimit = require('express-rate-limit');
+
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 uploads per window
+  message: 'Too many file uploads, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 5 * 1024 * 1024, // 5MB
+    files: 5 // Max 5 files per request
   }
 });
+
+// Add rate limiting to upload middleware
+upload.use(uploadLimiter);
 
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
