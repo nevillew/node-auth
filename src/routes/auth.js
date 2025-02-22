@@ -281,7 +281,7 @@ router.post('/token', tokenHandler, (req, res) => {
   res.json(res.locals.oauth.token);
 });
 
-// Machine to machine token generation
+// Machine to machine token management
 router.post('/m2m/token', authenticateHandler, async (req, res) => {
   try {
     const { clientId, scopes, tenantId } = req.body;
@@ -343,6 +343,51 @@ router.post('/m2m/token', authenticateHandler, async (req, res) => {
       scope: scopes.join(' '),
       token_type: 'Bearer'
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Revoke M2M token
+router.post('/m2m/token/revoke', authenticateHandler, async (req, res) => {
+  try {
+    const { token, clientId } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    // Find and validate token
+    const tokenRecord = await OAuthToken.findOne({
+      where: { 
+        accessToken: token,
+        type: 'm2m'
+      },
+      include: [{
+        model: OAuthClient,
+        where: { clientId }
+      }]
+    });
+
+    if (!tokenRecord) {
+      return res.status(404).json({ error: 'Token not found' });
+    }
+
+    // Revoke token
+    await tokenRecord.update({ revoked: true });
+
+    // Create audit log
+    await SecurityAuditLog.create({
+      userId: req.user.id,
+      event: 'M2M_TOKEN_REVOKED',
+      details: {
+        clientId,
+        tokenId: tokenRecord.id
+      },
+      severity: 'medium'
+    });
+
+    res.json({ message: 'Token revoked successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
