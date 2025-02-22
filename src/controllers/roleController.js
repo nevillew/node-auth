@@ -274,11 +274,59 @@ class RoleController {
 
   async list(req, res) {
     try {
-      const roles = await Role.findAll({
-        where: { tenantId: req.tenant.id },
-        include: [Permission]
+      const {
+        page = 1,
+        limit = 20,
+        sortBy = 'name',
+        sortOrder = 'ASC',
+        search,
+        isDefault
+      } = req.query;
+
+      const where = { tenantId: req.tenant.id };
+
+      if (search) {
+        where[Op.or] = [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { description: { [Op.iLike]: `%${search}%` } }
+        ];
+      }
+
+      if (isDefault !== undefined) {
+        where.isDefault = isDefault === 'true';
+      }
+
+      const roles = await Role.findAndCountAll({
+        where,
+        include: [{
+          model: Permission,
+          through: { attributes: [] }
+        }, {
+          model: User,
+          attributes: ['id'],
+          through: { attributes: [] }
+        }],
+        order: [[sortBy, sortOrder]],
+        limit: parseInt(limit),
+        offset: (page - 1) * limit,
+        distinct: true
       });
-      res.json(roles);
+
+      res.json({
+        roles: roles.rows.map(role => ({
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          scopes: role.scopes,
+          isDefault: role.isDefault,
+          permissions: role.Permissions,
+          userCount: role.Users.length,
+          createdAt: role.createdAt
+        })),
+        total: roles.count,
+        page: parseInt(page),
+        totalPages: Math.ceil(roles.count / limit)
+      });
     } catch (error) {
       logger.error('Role listing failed:', error);
       throw error;
