@@ -16,11 +16,37 @@ const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.'), false);
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  
+  // Validate file type
+  if (!allowedTypes.includes(file.mimetype)) {
+    return cb(new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.'), false);
   }
+
+  // Validate file size
+  if (file.size > maxSize) {
+    return cb(new Error('File too large. Maximum size is 5MB.'), false);
+  }
+
+  // Validate file name
+  const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+  if (safeName !== file.originalname) {
+    file.originalname = safeName;
+  }
+
+  // Scan file content
+  const fileHeader = file.buffer.slice(0, 4).toString('hex');
+  const validHeaders = {
+    'ffd8ffe0': 'image/jpeg',
+    '89504e47': 'image/png',
+    '47494638': 'image/gif'
+  };
+
+  if (!validHeaders[fileHeader]) {
+    return cb(new Error('Invalid file content'), false);
+  }
+
+  cb(null, true);
 };
 
 const upload = multer({

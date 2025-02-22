@@ -8,6 +8,21 @@ const authenticateHandler = async (req, res, next) => {
   if (req.headers.authorization) {
     await validateCsrfToken(req, res, next);
   }
+
+  // Validate required headers
+  if (!req.headers['x-request-id']) {
+    return res.status(400).json({ error: 'Missing request ID header' });
+  }
+
+  if (!req.headers['x-api-version']) {
+    return res.status(400).json({ error: 'Missing API version header' });
+  }
+
+  // Validate IP address format
+  const clientIP = req.ip || req.connection.remoteAddress;
+  if (!isValidIP(clientIP)) {
+    return res.status(400).json({ error: 'Invalid IP address format' });
+  }
   
   try {
     const request = new OAuth2Server.Request(req);
