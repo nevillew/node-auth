@@ -1,7 +1,19 @@
 const { User, Tenant, TenantUser } = require('../models');
 const bcrypt = require('bcrypt');
+const { AppError } = require('../middleware/errorHandler');
+const validate = require('../middleware/validate');
+const { 
+  createUserSchema, 
+  updateUserSchema, 
+  changePasswordSchema 
+} = require('../validations/userValidations');
 
 class UserController {
+  static validations = {
+    create: validate(createUserSchema),
+    update: validate(updateUserSchema),
+    changePassword: validate(changePasswordSchema)
+  };
   // Create a new user
   async create(req, res) {
     try {
