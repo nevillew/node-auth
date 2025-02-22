@@ -183,19 +183,6 @@ router.delete('/passkey/authenticators/:id', authenticateHandler, async (req, re
       });
     }
 
-    // Ensure user has at least one authenticator remaining
-    const remaining = await Authenticator.count({
-      where: { userId: req.user.id },
-      transaction: t
-    });
-
-    if (remaining <= 1) {
-      await t.rollback();
-      return res.status(400).json({ 
-        error: 'Cannot delete last authenticator',
-        code: 'LAST_AUTHENTICATOR'
-      });
-    }
 
     // Create security audit log
     await SecurityAuditLog.create({
