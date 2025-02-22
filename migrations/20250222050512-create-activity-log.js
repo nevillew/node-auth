@@ -2,7 +2,7 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('SecurityAuditLogs', {
+    await queryInterface.createTable('ActivityLogs', {
       id: {
         type: Sequelize.UUID,
         defaultValue: Sequelize.UUIDV4,
@@ -10,24 +10,20 @@ module.exports = {
       },
       userId: {
         type: Sequelize.UUID,
-        allowNull: true,
+        allowNull: false,
         references: {
           model: 'Users',
           key: 'id'
         },
         onDelete: 'CASCADE'
       },
-      event: {
+      action: {
         type: Sequelize.STRING,
         allowNull: false
       },
       details: Sequelize.JSON,
       ipAddress: Sequelize.STRING,
       userAgent: Sequelize.STRING,
-      severity: {
-        type: Sequelize.ENUM('low', 'medium', 'high', 'critical'),
-        defaultValue: 'low'
-      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE
@@ -38,13 +34,12 @@ module.exports = {
       }
     });
 
-    await queryInterface.addIndex('SecurityAuditLogs', ['userId']);
-    await queryInterface.addIndex('SecurityAuditLogs', ['event']);
-    await queryInterface.addIndex('SecurityAuditLogs', ['severity']);
-    await queryInterface.addIndex('SecurityAuditLogs', ['createdAt']);
+    await queryInterface.addIndex('ActivityLogs', ['userId']);
+    await queryInterface.addIndex('ActivityLogs', ['action']);
+    await queryInterface.addIndex('ActivityLogs', ['createdAt']);
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('SecurityAuditLogs');
+    await queryInterface.dropTable('ActivityLogs');
   }
 };

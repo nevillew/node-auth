@@ -2,7 +2,7 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('SecurityAuditLogs', {
+    await queryInterface.createTable('LoginHistories', {
       id: {
         type: Sequelize.UUID,
         defaultValue: Sequelize.UUIDV4,
@@ -10,24 +10,21 @@ module.exports = {
       },
       userId: {
         type: Sequelize.UUID,
-        allowNull: true,
+        allowNull: false,
         references: {
           model: 'Users',
           key: 'id'
         },
         onDelete: 'CASCADE'
       },
-      event: {
-        type: Sequelize.STRING,
-        allowNull: false
-      },
-      details: Sequelize.JSON,
       ipAddress: Sequelize.STRING,
       userAgent: Sequelize.STRING,
-      severity: {
-        type: Sequelize.ENUM('low', 'medium', 'high', 'critical'),
-        defaultValue: 'low'
+      location: Sequelize.JSON,
+      status: {
+        type: Sequelize.ENUM('success', 'failed'),
+        allowNull: false
       },
+      failureReason: Sequelize.STRING,
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE
@@ -38,13 +35,12 @@ module.exports = {
       }
     });
 
-    await queryInterface.addIndex('SecurityAuditLogs', ['userId']);
-    await queryInterface.addIndex('SecurityAuditLogs', ['event']);
-    await queryInterface.addIndex('SecurityAuditLogs', ['severity']);
-    await queryInterface.addIndex('SecurityAuditLogs', ['createdAt']);
+    await queryInterface.addIndex('LoginHistories', ['userId']);
+    await queryInterface.addIndex('LoginHistories', ['status']);
+    await queryInterface.addIndex('LoginHistories', ['createdAt']);
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.dropTable('SecurityAuditLogs');
+    await queryInterface.dropTable('LoginHistories');
   }
 };
