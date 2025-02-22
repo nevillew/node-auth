@@ -23,6 +23,75 @@ class UserController {
   }
 
   // Search users with filtering
+  async list(req, res) {
+    try {
+      const { 
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        sortOrder = 'DESC',
+        status,
+        role,
+        search
+      } = req.query;
+
+      const where = {};
+      
+      if (status) {
+        where.status = status;
+      }
+
+      if (search) {
+        where[Op.or] = [
+          { email: { [Op.iLike]: `%${search}%` } },
+          { name: { [Op.iLike]: `%${search}%` } }
+        ];
+      }
+
+      const include = [];
+      if (role) {
+        include.push({
+          model: Role,
+          where: { name: role },
+          through: { attributes: [] }
+        });
+      }
+
+      const users = await User.findAndCountAll({
+        where,
+        include,
+        order: [[sortBy, sortOrder]],
+        limit: parseInt(limit),
+        offset: (page - 1) * limit,
+        attributes: { 
+          exclude: ['password', 'resetToken', 'verificationToken']
+        }
+      });
+
+      // Generate signed URLs for avatars
+      const usersWithSignedUrls = await Promise.all(users.rows.map(async (user) => {
+        const userData = user.toJSON();
+        if (userData.avatar) {
+          userData.avatarUrl = await getSignedUrl(s3, new GetObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: userData.avatar
+          }), { expiresIn: 24 * 60 * 60 });
+        }
+        return userData;
+      }));
+
+      res.json({
+        users: usersWithSignedUrls,
+        total: users.count,
+        page: parseInt(page),
+        totalPages: Math.ceil(users.count / limit)
+      });
+    } catch (error) {
+      logger.error('User listing failed:', error);
+      next(new AppError(error.message, 400));
+    }
+  }
+
   async search(req, res) {
     try {
       const { 

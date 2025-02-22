@@ -13,6 +13,7 @@ router.post('/',
   },
   userController.create
 );
+router.get('/', authenticateHandler, userController.list);
 router.get('/:id', authenticateHandler, userController.get);
 router.put('/:id', authenticateHandler, userController.update);
 router.delete('/:id', authenticateHandler, userController.delete);
