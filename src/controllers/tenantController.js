@@ -122,15 +122,65 @@ class TenantController {
 
   // Suspend tenant
   async suspend(req, res) {
+    const t = await sequelize.transaction();
     try {
-      const tenant = await Tenant.findByPk(req.params.id);
+      const { reason } = req.body;
+      const tenant = await Tenant.findByPk(req.params.id, { transaction: t });
       
       if (!tenant) {
+        await t.rollback();
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      await tenant.update({ status: 'suspended' });
-      res.json(tenant);
+      // Update tenant status
+      await tenant.update({ 
+        status: 'suspended',
+        suspensionReason: reason,
+        suspendedAt: new Date(),
+        suspendedBy: req.user.id
+      }, { transaction: t });
+
+      // Optionally disable user logins
+      await tenant.db.models.User.update(
+        { isActive: false },
+        { where: { tenantId: tenant.id }, transaction: t }
+      );
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'TENANT_SUSPENDED',
+        details: {
+          tenantId: tenant.id,
+          reason,
+          suspendedBy: req.user.id
+        },
+        severity: 'high'
+      }, { transaction: t });
+
+      // Notify admins
+      const admins = await TenantUser.findAll({
+        where: {
+          tenantId: tenant.id,
+          roles: { [Op.contains]: ['admin'] }
+        },
+        include: [User],
+        transaction: t
+      });
+
+      await Promise.all(admins.map(admin => 
+        notificationService.sendSystemNotification(
+          admin.userId,
+          `Tenant ${tenant.name} has been suspended by ${req.user.name}`
+        )
+      ));
+
+      await t.commit();
+      res.json({
+        id: tenant.id,
+        status: 'suspended',
+        suspendedAt: tenant.suspendedAt
+      });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
