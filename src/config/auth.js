@@ -9,6 +9,23 @@ const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 login attempts per window
   message: 'Too many login attempts, please try again later',
+  handler: async (req, res, next) => {
+    const { email } = req.body;
+    if (email) {
+      const user = await User.findOne({ where: { email } });
+      if (user) {
+        const failedAttempts = user.failedLoginAttempts + 1;
+        await user.update({ 
+          failedLoginAttempts,
+          accountLockedUntil: failedAttempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null
+        });
+      }
+    }
+    res.status(429).json({ 
+      error: 'Too many login attempts',
+      retryAfter: req.rateLimit.resetTime
+    });
+  },
   store: new RedisStore({
     prefix: 'login_limit:',
     sendCommand: (...args) => manager.getRedisClient().then(client => client.sendCommand(args))
@@ -17,6 +34,13 @@ const loginRateLimiter = rateLimit({
 });
 
 // General API rate limiting
+const passwordResetRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 attempts per hour
+  message: 'Too many password reset attempts, please try again later',
+  keyGenerator: (req) => `${req.body.email || req.ip}:password-reset`
+});
+
 const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs

@@ -17,6 +17,8 @@
     "express-rate-limit": "^6.x",
     "express-validator": "^7.x",
     "helmet": "^8.0.0",
+    "speakeasy": "^2.1.0",
+    "qrcode": "^1.5.3",
     "jsonwebtoken": "^9.x",
     "multer": "^1.x",
     "nodemailer": "^6.x",
