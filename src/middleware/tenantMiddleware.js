@@ -1,6 +1,15 @@
-const { getTenantConnection } = require('../config/database');
+const { getTenantConnection, manager } = require('../config/database');
 
 async function tenantMiddleware(req, res, next) {
+  // Check cache first
+  const redisClient = await manager.getRedisClient();
+  const cacheKey = `tenant:${req.headers['x-tenant']}`;
+  const cachedTenant = await redisClient.get(cacheKey);
+  
+  if (cachedTenant) {
+    req.tenantDb = JSON.parse(cachedTenant);
+    return next();
+  }
   const tenantId = req.headers['x-tenant'];
   
   if (!tenantId) {

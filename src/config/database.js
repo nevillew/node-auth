@@ -1,6 +1,19 @@
 const { Sequelize } = require('sequelize');
-
+const redis = require('redis');
+const { createClient } = require('redis');
 require('dotenv').config();
+
+// Redis client factory
+const createRedisClient = async () => {
+  const client = createClient({
+    url: process.env.REDIS_URL || 'redis://localhost:6379'
+  });
+  
+  client.on('error', (err) => console.error('Redis Client Error', err));
+  
+  await client.connect();
+  return client;
+};
 
 const config = {
   development: {
@@ -40,7 +53,15 @@ module.exports = config;
 class DatabaseManager {
   constructor() {
     this.tenantConnections = new Map();
+    this.redisClient = null;
     this.models = require('../models');
+  }
+
+  async getRedisClient() {
+    if (!this.redisClient) {
+      this.redisClient = await createRedisClient();
+    }
+    return this.redisClient;
   }
 
   async getTenantConnection(tenantId) {

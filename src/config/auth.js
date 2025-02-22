@@ -1,5 +1,19 @@
 const OAuth2Server = require('oauth2-server');
 const passport = require('passport');
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+
+// Rate limiting configuration
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new RedisStore({
+    prefix: 'auth_limit:',
+    sendCommand: (...args) => manager.getRedisClient().then(client => client.sendCommand(args))
+  })
+});
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
