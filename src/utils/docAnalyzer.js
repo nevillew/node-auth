@@ -1,14 +1,47 @@
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../config/logger');
+const { cacheManager } = require('../services/cacheManager');
 
+/**
+ * Analyzes code documentation and suggests improvements
+ * @class DocAnalyzer 
+ */
 class DocAnalyzer {
   constructor() {
     this.jsdocTags = ['@param', '@returns', '@throws', '@example', '@description'];
+    this.config = {
+      ignorePatterns: [/\.test\.(js|ts)x?$/, /\.spec\.(js|ts)x?$/],
+      maxFileSize: 1024 * 1024 // 1MB
+    };
   }
 
-  async analyzeFile(filePath) {
+  async analyzeFile(filePath, progress) {
     try {
+      // Check file size
+      const stats = await fs.stat(filePath);
+      if (stats.size > this.config.maxFileSize) {
+        logger.warn(`File ${filePath} exceeds size limit of ${this.config.maxFileSize} bytes`);
+      }
+
+      // Check ignore patterns
+      if (this.config.ignorePatterns.some(pattern => pattern.test(filePath))) {
+        logger.debug(`Skipping ignored file ${filePath}`);
+        return null;
+      }
+
+      // Update progress
+      if (progress) {
+        progress.increment();
+      }
+
+      // Check cache
+      const cached = await cacheManager.get(filePath);
+      if (cached) {
+        logger.debug(`Using cached analysis for ${filePath}`);
+        return cached;
+      }
+
       const content = await fs.readFile(filePath, 'utf8');
       const ext = path.extname(filePath);
       

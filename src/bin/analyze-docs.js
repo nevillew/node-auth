@@ -6,6 +6,9 @@ const path = require('path');
 const glob = require('glob');
 const fs = require('fs').promises;
 const logger = require('../config/logger');
+const cliProgress = require('cli-progress');
+const colors = require('ansi-colors');
+const { loadConfig } = require('../config/analyzer');
 
 program
   .name('analyze-docs')
