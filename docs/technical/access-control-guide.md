@@ -333,7 +333,7 @@ GET /api/permissions/check/:resourceId/:action
    ```
 
 ## Related Documentation
-- Authentication Guide
-- Role Management Guide
-- Audit Log Guide
-- Security Policies
+- [OAuth 2.0 Configuration](../technical/oauth2-configuration.md)
+- [Role Management Guide](../technical/role-management-guide.md)
+- [Audit Log Guide](../technical/audit-log-guide.md)
+- [Security Policies](../security-policies.md)

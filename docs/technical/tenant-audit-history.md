@@ -323,7 +323,6 @@ interface TenantAuditHistoryParams {
 ```
 
 ## Related Documentation
-- Security Audit Guide
-- Access Control Guide
-- Performance Optimization
-- Data Retention Policies
+- [Access Control Guide](../technical/access-control-guide.md)
+- [Data Retention Policies](../technical/data-retention-policies.md)
+- [Security Policies](../security-policies.md)

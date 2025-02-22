@@ -312,3 +312,98 @@ Response:
 - Access Control Guide
 - Audit Log Guide
 - Security Policies
+# Permission Management Guide
+
+## Overview
+This document details the technical implementation of permission management in the multi-tenant platform, including role-based access control (RBAC), permission inheritance, and audit processes.
+
+## Permission Structure
+
+### Basic Components
+```javascript
+const permissionTypes = {
+  create: 'Create new resources',
+  read: 'View existing resources',
+  update: 'Modify existing resources',
+  delete: 'Remove existing resources',
+  manage: 'Full resource control'
+};
+
+const resourceTypes = {
+  users: 'User management',
+  roles: 'Role management',
+  tenants: 'Tenant management',
+  settings: 'System settings'
+};
+```
+
+### Permission Format
+```json
+{
+  "id": "uuid",
+  "name": "users:read",
+  "description": "View user details",
+  "resource": "users",
+  "action": "read",
+  "constraints": {
+    "tenant": "required",
+    "scope": "tenant"
+  }
+}
+```
+
+## Implementation Details
+
+### Permission Validation
+```javascript
+function validatePermission(user, permission) {
+  return user.roles.some(role =>
+    role.permissions.includes(permission) ||
+    role.permissions.includes('admin')
+  );
+}
+```
+
+### Permission Inheritance
+```javascript
+const permissionHierarchy = {
+  'admin': ['*'],
+  'write': ['read'],
+  'delete': ['read', 'write'],
+  'manage': ['read', 'write', 'delete']
+};
+```
+
+## Best Practices
+
+### Security
+1. **Permission Design**
+   - Use descriptive names
+   - Follow consistent patterns
+   - Document constraints
+   - Regular review
+
+2. **Implementation**
+   - Validate all permissions
+   - Cache common checks
+   - Audit changes
+   - Monitor usage
+
+### Performance
+1. **Optimization**
+   - Cache permissions
+   - Batch updates
+   - Efficient validation
+   - Quick lookups
+
+2. **Resource Management**
+   - Connection pooling
+   - Cache strategy
+   - Background tasks
+   - Monitoring
+
+## Related Documentation
+- [Role Management Guide](../technical/role-management-guide.md)
+- [Access Control Guide](../technical/access-control-guide.md)
+- [Audit Log Guide](../technical/audit-log-guide.md)
+- [Security Policies](../security-policies.md)
