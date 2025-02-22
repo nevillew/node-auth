@@ -21,18 +21,26 @@ class TenantDatabaseManager {
   }
 
   async getTenantConnection(tenantId) {
-    // Check if connection exists
-    if (this.connections.has(tenantId)) {
-      const connection = this.connections.get(tenantId);
-      try {
-        // Test connection
-        await connection.authenticate();
-        return connection;
-      } catch (error) {
-        // Remove failed connection
-        this.connections.delete(tenantId);
-        logger.error(`Connection failed for tenant ${tenantId}:`, error);
+    // Check Redis cache first
+    const cachedConfig = await redisService.get(`tenant:${tenantId}:config`);
+    
+    if (cachedConfig) {
+      if (this.connections.has(tenantId)) {
+        const connection = this.connections.get(tenantId);
+        try {
+          await connection.authenticate();
+          return connection;
+        } catch (error) {
+          this.connections.delete(tenantId);
+          logger.error(`Cached connection failed for tenant ${tenantId}:`, error);
+        }
       }
+      
+      // Create new connection using cached config
+      const connection = new Sequelize(cachedConfig);
+      await connection.authenticate();
+      this.connections.set(tenantId, connection);
+      return connection;
     }
 
     // Create new connection
@@ -45,6 +53,12 @@ class TenantDatabaseManager {
       await connection.authenticate();
       this.connections.set(tenantId, connection);
       logger.info(`Connected to database for tenant ${tenantId}`);
+      
+      // Cache the connection config
+      await redisService.set(`tenant:${tenantId}:config`, {
+        ...this.defaultConfig,
+        database: `tenant_${tenantId}`
+      }, 3600); // Cache for 1 hour
       
       return connection;
     } catch (error) {
