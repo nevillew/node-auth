@@ -197,11 +197,13 @@ class PassKeyService {
   }
 
   async verifyAuthentication(user, response) {
+    const t = await sequelize.transaction();
     try {
       const authenticator = await user.getAuthenticators({
         where: {
           credentialID: isoBase64URL.toBuffer(response.id)
-        }
+        },
+        transaction: t
       });
 
       if (!authenticator) {
@@ -225,13 +227,27 @@ class PassKeyService {
       const { verified, authenticationInfo } = verification;
 
       if (verified) {
-        // Update counter
+        // Update counter and last used timestamp
         await authenticator.update({
-          counter: authenticationInfo.newCounter
-        });
+          counter: authenticationInfo.newCounter,
+          lastUsedAt: new Date()
+        }, { transaction: t });
 
         // Clear challenge
-        await user.update({ currentChallenge: null });
+        await user.update({ currentChallenge: null }, { transaction: t });
+
+        // Create security audit log
+        await SecurityAuditLog.create({
+          userId: user.id,
+          event: 'PASSKEY_AUTHENTICATION',
+          details: {
+            authenticatorId: authenticator.id,
+            friendlyName: authenticator.friendlyName
+          },
+          severity: 'low'
+        }, { transaction: t });
+
+        await t.commit();
       }
 
       return verified;

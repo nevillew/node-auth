@@ -197,6 +197,18 @@ router.delete('/passkey/authenticators/:id', authenticateHandler, async (req, re
       });
     }
 
+    // Create security audit log
+    await SecurityAuditLog.create({
+      userId: req.user.id,
+      event: 'PASSKEY_REVOKED',
+      details: {
+        authenticatorId: authenticator.id,
+        friendlyName: authenticator.friendlyName,
+        lastUsedAt: authenticator.lastUsedAt
+      },
+      severity: 'medium'
+    }, { transaction: t });
+
     await authenticator.destroy({ transaction: t });
     await t.commit();
     res.status(204).send();
