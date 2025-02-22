@@ -60,7 +60,7 @@ class TenantController {
     }
   }
 
-  // Restore tenant
+  // Get tenant login history
   async getLoginHistory(req, res) {
     try {
       const { 
@@ -68,6 +68,7 @@ class TenantController {
         endDate, 
         status,
         userId,
+        ipAddress,
         page = 1, 
         limit = 20,
         sortOrder = 'DESC'
@@ -83,16 +84,44 @@ class TenantController {
 
       if (status) where.status = status;
       if (userId) where.userId = userId;
+      if (ipAddress) where.ipAddress = ipAddress;
 
       const loginHistory = await LoginHistory.findAndCountAll({
         where,
         include: [{
           model: User,
-          attributes: ['email', 'name']
+          attributes: ['id', 'email', 'name']
         }],
         order: [['createdAt', sortOrder]],
         limit: parseInt(limit),
-        offset: (page - 1) * limit
+        offset: (page - 1) * limit,
+        attributes: [
+          'id',
+          'userId',
+          'ipAddress',
+          'userAgent',
+          'location',
+          'status',
+          'failureReason',
+          'createdAt'
+        ]
+      });
+
+      // Create audit log for history access
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'LOGIN_HISTORY_ACCESSED',
+        details: {
+          tenantId: req.params.id,
+          filters: {
+            startDate,
+            endDate,
+            status,
+            userId,
+            ipAddress
+          }
+        },
+        severity: 'low'
       });
 
       res.json({
