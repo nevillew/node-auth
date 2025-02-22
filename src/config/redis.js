@@ -1,4 +1,4 @@
-const Redis = require('ioredis');
+const IORedis = require('ioredis');
 const { promisify } = require('util');
 const logger = require('./logger');
 const fallbackCache = require('../services/fallbackCache');

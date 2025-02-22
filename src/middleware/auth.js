@@ -1,7 +1,7 @@
-const OAuth2Server = require('oauth2-server');
+const { Request, Response } = require('oauth2-server');
 const { oauth2Server } = require('../config/auth');
-
 const { validateCsrfToken } = require('./csrf');
+const { AppError } = require('./errorHandler');
 
 const rateLimit = require('express-rate-limit');
 
@@ -237,7 +237,15 @@ const authenticateHandler = async (req, res, next) => {
 
     next();
   } catch (err) {
-    res.status(401).json({ error: 'Unauthorized' });
+    logger.error('Authentication failed:', err);
+    if (err instanceof OAuth2Server.OAuthError) {
+      res.status(err.code || 401).json({
+        error: err.name,
+        message: err.message
+      });
+    } else {
+      next(new AppError('AUTHENTICATION_FAILED', 401));
+    }
   }
 };
 
