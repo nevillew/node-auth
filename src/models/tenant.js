@@ -21,6 +21,33 @@ module.exports = (sequelize, DataTypes) => {
       unique: true,
       allowNull: false
     },
+    securityPolicy: {
+      type: DataTypes.JSON,
+      defaultValue: {
+        session: {
+          maxConcurrentSessions: 3,
+          sessionTimeout: 3600,
+          extendOnActivity: true,
+          requireMFA: false
+        },
+        twoFactor: {
+          required: false,
+          graceLogins: 3,
+          gracePeriodDays: 7,
+          allowBackupCodes: true,
+          allowRememberDevice: false,
+          exemptRoles: [],
+          enforcementDate: null,
+          enforcedBy: null
+        },
+        ipRestrictions: {
+          enabled: false,
+          allowedIPs: [],
+          allowedRanges: [],
+          blockList: []
+        }
+      }
+    },
     name: {
       type: DataTypes.STRING,
       allowNull: false
