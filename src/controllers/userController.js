@@ -238,6 +238,46 @@ class UserController {
     }
   }
 
+  async getLoginHistory(req, res) {
+    try {
+      const { 
+        startDate, 
+        endDate, 
+        status,
+        page = 1, 
+        limit = 20,
+        sortOrder = 'DESC'
+      } = req.query;
+
+      const where = { userId: req.params.id };
+      
+      if (startDate || endDate) {
+        where.createdAt = {};
+        if (startDate) where.createdAt[Op.gte] = new Date(startDate);
+        if (endDate) where.createdAt[Op.lte] = new Date(endDate);
+      }
+
+      if (status) where.status = status;
+
+      const loginHistory = await LoginHistory.findAndCountAll({
+        where,
+        order: [['createdAt', sortOrder]],
+        limit: parseInt(limit),
+        offset: (page - 1) * limit
+      });
+
+      res.json({
+        history: loginHistory.rows,
+        total: loginHistory.count,
+        page: parseInt(page),
+        totalPages: Math.ceil(loginHistory.count / limit)
+      });
+    } catch (error) {
+      logger.error('Login history retrieval failed:', error);
+      next(new AppError(error.message, 400));
+    }
+  }
+
   async getActivity(req, res) {
     const { userId } = req.params;
     const { startDate, endDate, type, page = 1, limit = 20 } = req.query;
