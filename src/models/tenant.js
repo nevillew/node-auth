@@ -63,22 +63,21 @@ module.exports = (sequelize, DataTypes) => {
           allowedIPs: [],
           allowedRanges: [],
           blockList: []
+        },
+        session: {
+          maxConcurrentSessions: 3,
+          sessionTimeout: 3600, // 1 hour in seconds
+          extendOnActivity: true,
+          requireMFA: false
+        },
+        twoFactor: {
+          required: false,
+          graceLogins: 3,
+          gracePeriodDays: 7,
+          allowBackupCodes: true,
+          allowRememberDevice: false
         }
       },
-      session: {
-        maxConcurrentSessions: 3,
-        sessionTimeout: 3600, // 1 hour in seconds
-        extendOnActivity: true,
-        requireMFA: false
-      },
-      twoFactor: {
-        required: false,
-        graceLogins: 3,
-        gracePeriodDays: 7,
-        allowBackupCodes: true,
-        allowRememberDevice: false
-      }
-    },
     status: {
       type: DataTypes.ENUM('active', 'suspended', 'pending_deletion'),
       defaultValue: 'active'
