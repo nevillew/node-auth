@@ -224,7 +224,7 @@ const hasAccess = hasRequiredScopes(
 ```
 
 ## Related Documentation
-- OAuth Configuration Guide
-- Role Management Guide
-- Security Policies
-- Access Control Guide
+- [OAuth 2.0 Configuration](../technical/oauth2-configuration.md)
+- [Role Management Guide](../technical/role-management-guide.md)
+- [Security Policies](../security-policies.md)
+- [Access Control Guide](../technical/access-control-guide.md)

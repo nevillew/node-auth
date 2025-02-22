@@ -21,6 +21,7 @@
 - Review process
 
 ## Testing
+See [Testing Guide](../docs/development/testing.md) for detailed information about:
 - Unit testing
 - Integration testing
 - E2E testing

@@ -275,7 +275,7 @@ await sdk.tenants.updateUserRoles(tenant.id, userId, {
 ```
 
 ### Related Documentation
-- [Security Policies](./security-policies.md)
-- [User Management](./user-management.md)
-- [API Reference](./api-reference.md)
-- [Deployment Guide](./deployment.md)
+- [Security Policies](../docs/security-policies.md)
+- [User Management Guide](../docs/user-management-guide.md)
+- [API Reference](../docs/api-reference.md)
+- [Deployment Guide](../docs/deployment.md)
