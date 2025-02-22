@@ -115,8 +115,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('active', 'suspended', 'pending_deletion'),
       defaultValue: 'active'
     },
-    deletionRequestedAt: DataTypes.DATE,
-    deletionScheduledAt: DataTypes.DATE,
+    deletionRequestedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    deletionScheduledAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     gracePeriodDays: {
       type: DataTypes.INTEGER,
       defaultValue: 7
@@ -130,11 +136,17 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: {}
     },
     onboardingStatus: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM('pending', 'in_progress', 'completed'),
       defaultValue: 'pending'
     },
-    createdAt: DataTypes.DATE,
-    updatedAt: DataTypes.DATE
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false
+    }
   }, {
     sequelize,
     modelName: 'Tenant',
