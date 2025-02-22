@@ -422,11 +422,14 @@ class UserController {
     try {
       const { email, password, name, avatar } = req.body;
       
-      // Check if user already exists
-      const existingUser = await User.findOne({ 
-        where: { email },
-        transaction: t 
-      });
+      // Validation moved to middleware
+      const validationResult = await validateUserCreation(req.body);
+      if (!validationResult.isValid) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: validationResult.errors
+        });
+      }
       
       if (existingUser) {
         await t.rollback();

@@ -36,10 +36,40 @@ const redisPool = [];
 const MAX_POOL_SIZE = process.env.REDIS_POOL_SIZE || 10;
 let redisIsDown = false;
 
+const POOL_MIN_SIZE = 5;
+const POOL_MAX_SIZE = 20;
+const POOL_ACQUIRE_TIMEOUT = 30000;
+
 const createRedisClient = async () => {
-  if (redisPool.length > 0) {
-    return redisPool.pop();
+  // Check pool size and create new connections if needed
+  while (redisPool.length < POOL_MIN_SIZE) {
+    const client = await initializeRedisClient();
+    redisPool.push(client);
   }
+
+  // Get client from pool with timeout
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Redis connection timeout')), POOL_ACQUIRE_TIMEOUT);
+  });
+
+  const clientPromise = new Promise(resolve => {
+    if (redisPool.length > 0) {
+      resolve(redisPool.pop());
+    } else if (redisPool.length < POOL_MAX_SIZE) {
+      resolve(initializeRedisClient());
+    } else {
+      resolve(new Promise(resolve => {
+        const checkPool = setInterval(() => {
+          if (redisPool.length > 0) {
+            clearInterval(checkPool);
+            resolve(redisPool.pop());
+          }
+        }, 100);
+      }));
+    }
+  });
+
+  return Promise.race([clientPromise, timeoutPromise]);
 
   try {
     const client = createClient({

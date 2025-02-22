@@ -95,6 +95,29 @@ module.exports = async (req, res, next) => {
 
     next();
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    logger.error('Tenant context error:', {
+      error: error.message,
+      stack: error.stack,
+      tenantId: req.headers['x-tenant-id']
+    });
+
+    if (error.name === 'SequelizeConnectionError') {
+      return res.status(503).json({ 
+        error: 'Database connection failed',
+        code: 'DB_CONNECTION_ERROR'
+      });
+    }
+
+    if (error.name === 'SequelizeTimeoutError') {
+      return res.status(504).json({
+        error: 'Database request timed out',
+        code: 'DB_TIMEOUT_ERROR' 
+      });
+    }
+
+    res.status(500).json({
+      error: 'Internal server error',
+      code: 'INTERNAL_ERROR'
+    });
   }
 };

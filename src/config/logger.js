@@ -34,13 +34,16 @@ const structuredFormat = winston.format((info) => {
   return info;
 });
 
+const metrics = require('./metrics');
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: combine(
     timestamp(),
     errors({ stack: true }),
     structuredFormat(),
-    json()
+    json(),
+    metrics.logMetrics()
   ),
   defaultMeta: {
     environment: process.env.NODE_ENV,

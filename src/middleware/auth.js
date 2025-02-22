@@ -3,11 +3,21 @@ const { oauth2Server } = require('../config/auth');
 
 const { validateCsrfToken } = require('./csrf');
 
+const rateLimit = require('express-rate-limit');
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: 'Too many authentication attempts, please try again later'
+});
+
 const authenticateHandler = async (req, res, next) => {
-  // Validate CSRF token for authenticated requests
-  if (req.headers.authorization) {
-    await validateCsrfToken(req, res, next);
-  }
+  // Apply rate limiting
+  await authRateLimiter(req, res, async () => {
+    // Validate CSRF token for authenticated requests
+    if (req.headers.authorization) {
+      await validateCsrfToken(req, res, next);
+    }
 
   // Validate required headers
   if (!req.headers['x-request-id']) {
