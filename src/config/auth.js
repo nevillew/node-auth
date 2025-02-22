@@ -209,7 +209,15 @@ const oauth2Server = new OAuth2Server({
   model: oauth2Model,
   accessTokenLifetime: 60 * 60, // 1 hour
   refreshTokenLifetime: 60 * 60 * 24 * 14, // 14 days
-  allowBearerTokensInQueryString: true
+  allowBearerTokensInQueryString: true,
+  requireClientAuthentication: {
+    authorization_code: true,
+    refresh_token: true
+  },
+  // Require PKCE for public clients
+  requirePKCE: true,
+  // Allow both S256 and plain challenges (but prefer S256)
+  allowedPKCEMethods: ['S256', 'plain']
 });
 
 // Passport Configuration

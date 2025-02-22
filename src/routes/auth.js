@@ -277,8 +277,58 @@ router.get('/google/callback',
 );
 
 // OAuth2 token endpoints
-router.post('/token', tokenHandler, (req, res) => {
-  res.json(res.locals.oauth.token);
+const { generateCodeVerifier, generateCodeChallenge } = require('../utils/pkce');
+const tokenIntrospectionService = require('../services/tokenIntrospectionService');
+
+// Generate PKCE challenge
+router.post('/pkce/challenge', (req, res) => {
+  const verifier = generateCodeVerifier();
+  const challenge = generateCodeChallenge(verifier);
+  
+  res.json({
+    code_verifier: verifier,
+    code_challenge: challenge,
+    code_challenge_method: 'S256'
+  });
+});
+
+router.post('/token', async (req, res, next) => {
+  try {
+    // Validate PKCE parameters for authorization code grant
+    if (req.body.grant_type === 'authorization_code') {
+      if (!req.body.code_verifier) {
+        return res.status(400).json({ error: 'code_verifier is required' });
+      }
+      
+      // Verify the code challenge matches
+      const challenge = generateCodeChallenge(req.body.code_verifier);
+      if (challenge !== req.body.code_challenge) {
+        return res.status(400).json({ error: 'Invalid code_verifier' });
+      }
+    }
+
+    // Generate token
+    tokenHandler(req, res, () => {
+      res.json(res.locals.oauth.token);
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Token introspection endpoint
+router.post('/introspect', authenticateHandler, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'token is required' });
+    }
+
+    const introspection = await tokenIntrospectionService.introspectToken(token);
+    res.json(introspection);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Machine to machine token management
