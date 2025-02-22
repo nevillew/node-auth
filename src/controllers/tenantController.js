@@ -1,5 +1,8 @@
 const { Tenant, User, TenantUser } = require('../models');
 const { v4: uuidv4 } = require('uuid');
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { s3 } = require('../middleware/fileUpload');
 
 class TenantController {
   // Create a new tenant
@@ -130,6 +133,16 @@ class TenantController {
         }
       }
     });
+
+    // Generate signed URLs for logos
+    await Promise.all(tenants.map(async (tenant) => {
+      if (tenant.logo) {
+        tenant.logoUrl = await getSignedUrl(s3, new GetObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: tenant.logo
+        }), { expiresIn: 24 * 60 * 60 });
+      }
+    }));
 
     for (const tenant of tenants) {
       const t = await sequelize.transaction();
