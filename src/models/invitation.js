@@ -25,8 +25,16 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     status: {
-      type: DataTypes.ENUM('pending', 'accepted', 'expired'),
+      type: DataTypes.ENUM('pending', 'accepted', 'expired', 'cancelled'),
       defaultValue: 'pending'
+    },
+    cancelledAt: DataTypes.DATE,
+    cancelledBy: {
+      type: DataTypes.UUID,
+      references: {
+        model: 'Users',
+        key: 'id'
+      }
     },
     expiresAt: {
       type: DataTypes.DATE,
