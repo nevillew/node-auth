@@ -124,6 +124,46 @@ router.get('/passkey/authenticators', authenticateHandler, async (req, res) => {
   }
 });
 
+router.put('/passkey/authenticators/:id', authenticateHandler, async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const { friendlyName } = req.body;
+    if (!friendlyName) {
+      await t.rollback();
+      return res.status(400).json({ 
+        error: 'friendlyName is required',
+        code: 'MISSING_FRIENDLY_NAME'
+      });
+    }
+
+    const authenticator = await Authenticator.findOne({
+      where: {
+        id: req.params.id,
+        userId: req.user.id
+      },
+      transaction: t
+    });
+
+    if (!authenticator) {
+      await t.rollback();
+      return res.status(404).json({ 
+        error: 'Authenticator not found',
+        code: 'AUTHENTICATOR_NOT_FOUND'
+      });
+    }
+
+    await authenticator.update({ friendlyName }, { transaction: t });
+    await t.commit();
+    res.json(authenticator);
+  } catch (error) {
+    await t.rollback();
+    res.status(500).json({ 
+      error: error.message,
+      code: 'AUTHENTICATOR_UPDATE_ERROR'
+    });
+  }
+});
+
 router.delete('/passkey/authenticators/:id', authenticateHandler, async (req, res) => {
   const t = await sequelize.transaction();
   try {
