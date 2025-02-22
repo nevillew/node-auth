@@ -41,7 +41,7 @@ router.get('/:id/profile', authenticateHandler, userController.getProfile);
 router.put('/:id/profile', 
   authenticateHandler,
   upload.single('avatar'),
-  userController.updateProfile
+  userController.update
 );
 
 // Account settings
