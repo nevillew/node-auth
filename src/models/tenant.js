@@ -108,7 +108,10 @@ module.exports = (sequelize, DataTypes) => {
           graceLogins: 3,
           gracePeriodDays: 7,
           allowBackupCodes: true,
-          allowRememberDevice: false
+          allowRememberDevice: false,
+          exemptRoles: [],
+          enforcementDate: null,
+          enforcedBy: null
         }
       },
     status: {

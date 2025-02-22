@@ -137,26 +137,43 @@ const authenticateHandler = async (req, res, next) => {
 
       // Check 2FA requirement
       if (tenant.securityPolicy.twoFactor?.required) {
-        const user = await User.findByPk(token.user.id);
-        if (!user.twoFactorEnabled) {
-          // Check if within grace period
-          const gracePeriodEnd = new Date(user.createdAt.getTime() + 
-            (tenant.securityPolicy.twoFactor.gracePeriodDays * 24 * 60 * 60 * 1000));
+        const user = await User.findByPk(token.user.id, {
+          include: [{
+            model: Role,
+            through: { attributes: ['roles'] }
+          }]
+        });
+
+        // Check if user is exempt based on roles
+        const isExempt = user.Roles.some(role => 
+          tenant.securityPolicy.twoFactor.exemptRoles.includes(role.name)
+        );
+
+        if (!isExempt && !user.twoFactorEnabled) {
+          // Calculate grace period from enforcement date or user creation
+          const enforcementDate = tenant.securityPolicy.twoFactor.enforcementDate || 
+            new Date(user.createdAt.getTime() + 
+              (tenant.securityPolicy.twoFactor.gracePeriodDays * 24 * 60 * 60 * 1000));
+          
           const graceLoginsLeft = tenant.securityPolicy.twoFactor.graceLogins - (user.loginCount || 0);
           
-          if (new Date() > gracePeriodEnd && graceLoginsLeft <= 0) {
+          if (new Date() > enforcementDate && graceLoginsLeft <= 0) {
             // Create security audit log
             await SecurityAuditLog.create({
               userId: user.id,
-              event: 'TWO_FACTOR_GRACE_PERIOD_EXPIRED',
+              event: 'TWO_FACTOR_ENFORCEMENT_BLOCKED',
               severity: 'high',
               details: {
-                gracePeriodEnd,
-                totalLogins: user.loginCount
+                enforcementDate,
+                totalLogins: user.loginCount,
+                tenantId: tenant.id
               }
             });
             
-            throw new AppError('2FA setup required - grace period expired', 403);
+            throw new AppError('TWO_FACTOR_REQUIRED', 403, {
+              enforcementDate,
+              graceLoginsLeft: 0
+            });
           }
           
           // Increment login count and notify user
@@ -164,10 +181,23 @@ const authenticateHandler = async (req, res, next) => {
           const remainingLogins = tenant.securityPolicy.twoFactor.graceLogins - user.loginCount;
           
           if (remainingLogins <= 3) {
-            await notificationService.sendSystemNotification(
-              user.id,
-              `Please set up 2FA. You have ${remainingLogins} logins remaining before it becomes mandatory.`
-            );
+            await Promise.all([
+              notificationService.sendSystemNotification(
+                user.id,
+                `2FA Required: ${remainingLogins} logins remaining before enforcement`
+              ),
+              emailService.sendEmail({
+                to: user.email,
+                subject: '2FA Setup Required',
+                template: '2fa-required',
+                context: {
+                  name: user.name,
+                  remainingLogins,
+                  enforcementDate: enforcementDate.toLocaleDateString(),
+                  setupUrl: `${process.env.FRONTEND_URL}/settings/security/2fa/setup`
+                }
+              })
+            ]);
           }
         }
       }
