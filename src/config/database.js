@@ -1,25 +1,30 @@
 const { Sequelize } = require('sequelize');
 
-module.exports = {
+require('dotenv').config();
+
+const config = {
   development: {
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'multitenant_dev',
-    host: process.env.DB_HOST || '127.0.0.1',
+    username: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
     dialect: 'postgres'
   },
   test: {
-    username: process.env.DB_USERNAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    database: process.env.DB_NAME || 'multitenant_test',
-    host: process.env.DB_HOST || '127.0.0.1',
+    username: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: `${process.env.DB_NAME}_test`,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
     dialect: 'postgres'
   },
   production: {
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+    database: `${process.env.DB_NAME}_prod`,
     host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
     dialect: 'postgres',
     dialectOptions: {
       ssl: {
@@ -29,6 +34,8 @@ module.exports = {
     }
   }
 };
+
+module.exports = config;
 
 class DatabaseManager {
   constructor() {
