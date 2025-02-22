@@ -121,7 +121,15 @@ const statusUpdateSchema = Joi.object({
 });
 
 const roleAssignmentSchema = Joi.object({
-  roles: Joi.array().items(Joi.string().uuid()).min(1).required()
+  roleIds: Joi.array()
+    .items(Joi.string().uuid())
+    .min(1)
+    .required()
+    .messages({
+      'array.min': 'At least one role must be assigned',
+      'array.base': 'Role IDs must be an array',
+      'string.guid': 'Invalid role ID format'
+    })
 });
 
 const permissionUpdateSchema = Joi.object({

@@ -147,32 +147,24 @@ class UserController {
 
   // Role assignment
   async assignRoles(req, res) {
-    const { userId } = req.params;
-    const { roles } = req.body;
-    const t = await sequelize.transaction();
-
     try {
-      const user = await User.findByPk(userId);
-      if (!user) throw new AppError('User not found', 404);
+      const { userId } = req.params;
+      const { roleIds } = req.body;
 
-      await UserRole.destroy({ 
-        where: { userId },
-        transaction: t
-      });
-
-      await UserRole.bulkCreate(
-        roles.map(roleId => ({ userId, roleId })),
-        { transaction: t }
+      const roles = await roleService.assignRolesToUser(
+        userId, 
+        roleIds,
+        req.user.id
       );
 
-      await ActivityLog.create({
-        userId,
-        action: 'ROLE_ASSIGNMENT',
-        details: { roles }
-      }, { transaction: t });
-
-      await t.commit();
-      res.json({ message: 'Roles updated successfully' });
+      res.json({ 
+        message: 'Roles assigned successfully',
+        roles: roles.map(r => ({
+          id: r.id,
+          name: r.name,
+          scopes: r.scopes
+        }))
+      });
     } catch (error) {
       await t.rollback();
       next(new AppError(error.message, 400));
