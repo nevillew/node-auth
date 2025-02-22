@@ -4,15 +4,44 @@ const { createClient } = require('redis');
 require('dotenv').config();
 
 // Redis client factory
+const redis = require('redis');
+const { createClient } = require('redis');
+const { promisify } = require('util');
+
+const redisPool = [];
+const MAX_POOL_SIZE = 10;
+
 const createRedisClient = async () => {
+  if (redisPool.length > 0) {
+    return redisPool.pop();
+  }
+
   const client = createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    socket: {
+      reconnectStrategy: (retries) => Math.min(retries * 50, 500)
+    }
   });
-  
+
   client.on('error', (err) => console.error('Redis Client Error', err));
+  client.on('ready', () => console.log('Redis client ready'));
+  client.on('reconnecting', () => console.log('Redis reconnecting'));
   
   await client.connect();
+  
+  // Add monitoring commands
+  client.monitor = promisify(client.monitor).bind(client);
+  client.info = promisify(client.info).bind(client);
+  
   return client;
+};
+
+const releaseRedisClient = (client) => {
+  if (redisPool.length < MAX_POOL_SIZE) {
+    redisPool.push(client);
+  } else {
+    client.quit();
+  }
 };
 
 const config = {
@@ -93,7 +122,27 @@ class DatabaseManager {
 
     const sequelize = new Sequelize(tenant.databaseUrl, {
       dialect: 'postgres',
-      logging: false
+      logging: false,
+      pool: {
+        max: 10,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      },
+      retry: {
+        match: [
+          /ETIMEDOUT/,
+          /EHOSTUNREACH/,
+          /ECONNRESET/,
+          /ECONNREFUSED/,
+          /ETIMEDOUT/,
+          /ESOCKETTIMEDOUT/,
+          /EHOSTUNREACH/,
+          /EPIPE/,
+          /EAI_AGAIN/
+        ],
+        max: 3
+      }
     });
 
     await sequelize.authenticate();

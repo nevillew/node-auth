@@ -4,13 +4,26 @@ const rateLimit = require('express-rate-limit');
 const RedisStore = require('rate-limit-redis');
 
 // Rate limiting configuration
-const authRateLimiter = rateLimit({
+// Brute force protection for login attempts
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 login attempts per window
+  message: 'Too many login attempts, please try again later',
+  store: new RedisStore({
+    prefix: 'login_limit:',
+    sendCommand: (...args) => manager.getRedisClient().then(client => client.sendCommand(args))
+  }),
+  keyGenerator: (req) => `${req.body.email || req.ip}:login`
+});
+
+// General API rate limiting
+const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
   store: new RedisStore({
-    prefix: 'auth_limit:',
+    prefix: 'api_limit:',
     sendCommand: (...args) => manager.getRedisClient().then(client => client.sendCommand(args))
   }),
   keyGenerator: (req) => {
