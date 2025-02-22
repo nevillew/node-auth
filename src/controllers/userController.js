@@ -433,16 +433,99 @@ class UserController {
 
   // Delete user
   async delete(req, res) {
+    const t = await sequelize.transaction();
     try {
-      const user = await User.findByPk(req.params.id);
+      const userId = req.params.id;
+      const deleterId = req.user.id;
       
+      const user = await User.findByPk(userId, { transaction: t });
       if (!user) {
+        await t.rollback();
         return res.status(404).json({ error: 'User not found' });
       }
 
-      await user.destroy();
+      // Check if user is last admin in any tenants
+      const tenantAdmins = await TenantUser.findAll({
+        where: {
+          userId,
+          roles: { [Op.contains]: ['admin'] }
+        },
+        include: [Tenant],
+        transaction: t
+      });
+
+      for (const tenantAdmin of tenantAdmins) {
+        const adminCount = await TenantUser.count({
+          where: {
+            tenantId: tenantAdmin.tenantId,
+            roles: { [Op.contains]: ['admin'] }
+          },
+          transaction: t
+        });
+
+        if (adminCount === 1) {
+          await t.rollback();
+          return res.status(400).json({ 
+            error: `Cannot delete user - they are the last admin for tenant ${tenantAdmin.Tenant.name}`
+          });
+        }
+      }
+
+      // Soft delete user
+      await user.update({
+        status: 'deleted',
+        deletedAt: new Date(),
+        deletedBy: deleterId
+      }, { transaction: t });
+
+      // Revoke all active sessions
+      await OAuthToken.update(
+        { revoked: true },
+        { where: { userId } },
+        { transaction: t }
+      );
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: deleterId,
+        event: 'USER_DELETED',
+        details: {
+          deletedUserId: userId,
+          email: user.email,
+          tenants: tenantAdmins.map(t => t.tenantId)
+        },
+        severity: 'high'
+      }, { transaction: t });
+
+      // Notify tenant admins
+      const tenantIds = tenantAdmins.map(t => t.tenantId);
+      const tenantAdminsToNotify = await TenantUser.findAll({
+        where: {
+          tenantId: { [Op.in]: tenantIds },
+          roles: { [Op.contains]: ['admin'] }
+        },
+        include: [User],
+        transaction: t
+      });
+
+      await Promise.all(tenantAdminsToNotify.map(admin => 
+        notificationService.sendEmail({
+          to: admin.User.email,
+          subject: `User ${user.email} deleted`,
+          template: 'user-deleted',
+          context: {
+            name: admin.User.name,
+            deletedUser: user.email,
+            deletedBy: req.user.email,
+            date: new Date().toLocaleDateString()
+          }
+        })
+      ));
+
+      await t.commit();
       res.status(204).send();
     } catch (error) {
+      await t.rollback();
       res.status(400).json({ error: error.message });
     }
   }

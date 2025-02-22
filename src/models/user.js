@@ -113,8 +113,16 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     status: {
-      type: DataTypes.ENUM('active', 'inactive', 'suspended'),
+      type: DataTypes.ENUM('active', 'inactive', 'suspended', 'deleted'),
       defaultValue: 'active'
+    },
+    deletedAt: DataTypes.DATE,
+    deletedBy: {
+      type: DataTypes.UUID,
+      references: {
+        model: 'Users',
+        key: 'id'
+      }
     },
     statusReason: DataTypes.STRING,
     statusChangedAt: DataTypes.DATE,
