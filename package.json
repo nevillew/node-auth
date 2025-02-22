@@ -11,30 +11,31 @@
     "seed": "sequelize-cli db:seed:all"
   },
   "dependencies": {
+    "bcrypt": "^5.x",
+    "bull": "^4.x",
     "express": "^4.x",
+    "express-rate-limit": "^6.x",
+    "express-validator": "^7.x",
+    "jsonwebtoken": "^9.x",
+    "multer": "^1.x",
+    "nodemailer": "^6.x",
     "oauth2-server": "^3.x",
     "passport": "^0.6.x",
     "passport-google-oauth20": "^2.x",
     "passport-local": "^1.x",
+    "pg": "^8.13.3",
+    "pg-hstore": "^2.3.4",
     "redis": "^4.x",
+    "sequelize": "^6.37.5",
+    "uuid": "^11.1.0",
     "winston": "^3.x",
-    "bull": "^4.x",
-    "bcrypt": "^5.x",
-    "jsonwebtoken": "^9.x",
-    "zod": "^3.x",
-    "express-rate-limit": "^6.x",
-    "express-validator": "^7.x",
-    "multer": "^1.x",
-    "nodemailer": "^6.x",
-    "sequelize": "^6.x",
-    "pg": "^8.x",
-    "pg-hstore": "^2.x"
+    "zod": "^3.x"
   },
   "devDependencies": {
-    "jest": "^29.x",
-    "nodemon": "^3.x",
     "@types/node": "^18.x",
     "dotenv": "^16.x",
-    "sequelize-cli": "^6.x"
+    "jest": "^29.x",
+    "nodemon": "^3.x",
+    "sequelize-cli": "^6.6.2"
   }
 }
