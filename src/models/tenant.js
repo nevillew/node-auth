@@ -38,6 +38,18 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       defaultValue: 'active'
     },
+    settings: {
+      type: DataTypes.JSON,
+      defaultValue: {}
+    },
+    featureFlags: {
+      type: DataTypes.JSON,
+      defaultValue: {}
+    },
+    onboardingStatus: {
+      type: DataTypes.STRING,
+      defaultValue: 'pending'
+    },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE
   }, {

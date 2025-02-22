@@ -58,6 +58,14 @@ module.exports = (sequelize, DataTypes) => {
     resetTokenExpires: DataTypes.DATE,
     preferences: DataTypes.JSON,
     lastActivity: DataTypes.DATE,
+    profile: {
+      type: DataTypes.JSON,
+      defaultValue: {}
+    },
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE
   }, {
