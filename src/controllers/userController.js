@@ -1,4 +1,7 @@
 const { User, Tenant, TenantUser } = require('../models');
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { s3 } = require('../middleware/fileUpload');
 const bcrypt = require('bcrypt');
 const { AppError } = require('../middleware/errorHandler');
 const validate = require('../middleware/validate');
@@ -66,8 +69,20 @@ class UserController {
         attributes: { exclude: ['password'] }
       });
 
+      // Generate signed URLs for avatars
+      const usersWithSignedUrls = await Promise.all(users.rows.map(async (user) => {
+        const userData = user.toJSON();
+        if (userData.avatar) {
+          userData.avatarUrl = await getSignedUrl(s3, new GetObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: userData.avatar
+          }), { expiresIn: 24 * 60 * 60 });
+        }
+        return userData;
+      }));
+
       res.json({
-        users: users.rows,
+        users: usersWithSignedUrls,
         total: users.count,
         page,
         totalPages: Math.ceil(users.count / limit)
@@ -398,6 +413,14 @@ class UserController {
       
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Generate fresh signed URL if avatar exists
+      if (user.avatar) {
+        user.avatarUrl = await getSignedUrl(s3, new GetObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: user.avatar
+        }), { expiresIn: 24 * 60 * 60 });
       }
 
       res.json(user);
