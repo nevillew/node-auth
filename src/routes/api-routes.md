@@ -14,10 +14,10 @@ POST /auth/logout - Logout user
 POST /auth/2fa/setup - Setup 2FA
 POST /auth/2fa/verify - Verify 2FA setup
 POST /auth/2fa/login - Login with 2FA
-POST /auth/verify-email - Request email verification
-POST /auth/verify-email/confirm - Confirm email verification
-POST /auth/reset-password - Request password reset
-POST /auth/reset-password/confirm - Confirm password reset
+POST /auth/email/verify - Request email verification
+POST /auth/email/verify/confirm - Confirm email verification
+POST /auth/password/reset - Request password reset
+POST /auth/password/reset/confirm - Confirm password reset
 PUT /auth/preferences - Update user preferences
 
 ## User Routes
@@ -30,18 +30,13 @@ POST /api/users/bulk/update - Bulk update users
 PUT /api/users/:id/status - Update user status
 PUT /api/users/:id/roles - Assign roles to user
 PUT /api/users/:id/permissions - Update user permissions
-GET /api/users/:id/activity - Get user activity
-POST /api/users/:id/deactivate - Deactivate user
+GET /api/users/:id/activity - Get user activity history
+PUT /api/users/:id/status - Update user status (including deactivation)
 GET /api/users/:id/profile - Get user profile
 PUT /api/users/:id/profile - Update user profile
-GET /api/users/:id/preferences - Get user preferences
+GET /api/users/:id/preferences - Get all user preferences
 PUT /api/users/:id/preferences - Update user preferences
-GET /api/users/:id/email-preferences - Get email preferences
-PUT /api/users/:id/email-preferences - Update email preferences
-POST /api/users/:id/change-password - Change password
-POST /api/users/:id/reset-password - Request password reset
-POST /api/users/:id/reset-password/confirm - Confirm password reset
-GET /api/users/:id/activity - Get activity history
+PUT /api/users/:id/password - Change password
 GET /api/users/:id/login-history - Get login history
 GET /api/users/:id/tenants - Get user's tenants
 
@@ -54,7 +49,6 @@ DELETE /api/tenants/:id - Delete tenant
 POST /api/tenants/:id/restore - Restore tenant
 POST /api/tenants/invitations/accept - Accept tenant invitation
 DELETE /api/tenants/:id/users/:userId - Remove user from tenant
-POST /api/tenants/:id/users/:userId/remove - Remove user from tenant
 PUT /api/tenants/:id/users/:userId/roles - Update user roles in tenant
 
 ## Notification Routes
