@@ -1,5 +1,8 @@
 {
   "name": "multi-tenant-app",
+  "bin": {
+    "analyze-code": "./src/bin/analyze-code.js"
+  },
   "version": "1.0.0",
   "description": "Multi-tenant application with user management",
   "main": "src/index.js",
@@ -12,14 +15,19 @@
     "migrate": "sequelize-cli db:migrate",
     "seed": "sequelize-cli db:seed:all",
     "build:sdk": "cd sdk && npm run build",
-    "test:sdk": "cd sdk && npm test"
+    "test:sdk": "cd sdk && npm test",
+    "analyze": "node src/bin/analyze-code.js",
+    "analyze:fix": "node src/bin/analyze-code.js --fix"
   },
   "dependencies": {
     "bcrypt": "^5.x",
     "bull": "^4.x",
+    "commander": "^8.3.0",
+    "eslint": "^8.4.1",
     "express": "^4.x",
     "express-rate-limit": "^6.x",
     "express-validator": "^7.x",
+    "glob": "^7.2.0",
     "helmet": "^8.0.0",
     "speakeasy": "^2.1.0",
     "qrcode": "^1.5.3",
@@ -35,6 +43,7 @@
     "passport-local": "^1.x",
     "pg": "^8.13.3",
     "pg-hstore": "^2.3.4",
+    "prettier": "^2.5.1",
     "rate-limit-redis": "^3.0.0",
     "redis": "^4.x",
     "redis-om": "^0.3.6",
