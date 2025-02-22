@@ -194,6 +194,14 @@ class TenantController {
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
+      // Generate fresh signed URL if logo exists
+      if (tenant.logo) {
+        tenant.logoUrl = await getSignedUrl(s3, new GetObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: tenant.logo
+        }), { expiresIn: 24 * 60 * 60 });
+      }
+      
       res.json(tenant);
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -208,8 +216,9 @@ class TenantController {
       
       // Handle logo upload if present
       if (req.file) {
-        const { signedUrl } = await uploadToS3(req.file, 'tenant-logos');
-        updates.logo = signedUrl;
+        const { key, signedUrl } = await uploadToS3(req.file, 'tenant-logos', 24 * 60 * 60); // 24 hour signed URL
+        updates.logo = key;
+        updates.logoUrl = signedUrl;
       }
       
       if (!tenant) {

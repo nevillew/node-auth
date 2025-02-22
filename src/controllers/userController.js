@@ -409,21 +409,35 @@ class UserController {
   // Update user
   async update(req, res) {
     try {
-      const { name, avatar } = req.body;
+      const { name } = req.body;
       const user = await User.findByPk(req.params.id);
+      
+      const updates = { name };
+
+      // Handle avatar upload if present
+      if (req.file) {
+        const { key, signedUrl } = await uploadToS3(req.file, 'avatars', 24 * 60 * 60); // 24 hour signed URL
+        updates.avatar = key;
+        updates.avatarUrl = signedUrl;
+      }
       
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      await user.update({
-        name,
-        avatar
-      });
+      await user.update(updates);
 
       const updatedUser = await User.findByPk(user.id, {
         attributes: { exclude: ['password'] }
       });
+
+      // Generate fresh signed URL if avatar exists
+      if (updatedUser.avatar) {
+        updatedUser.avatarUrl = await getSignedUrl(s3, new GetObjectCommand({
+          Bucket: process.env.AWS_BUCKET_NAME,
+          Key: updatedUser.avatar
+        }), { expiresIn: 24 * 60 * 60 });
+      }
 
       res.json(updatedUser);
     } catch (error) {

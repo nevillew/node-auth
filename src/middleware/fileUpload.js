@@ -1,5 +1,5 @@
 const multer = require('multer');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const logger = require('../config/logger');
@@ -33,7 +33,7 @@ const upload = multer({
 
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
-const uploadToS3 = async (file, folder) => {
+const uploadToS3 = async (file, folder, maxAge = 3600) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const key = `${folder}/${uuidv4()}${ext}`;
   
@@ -55,7 +55,9 @@ const uploadToS3 = async (file, folder) => {
       Expires: 3600 // 1 hour
     };
     
-    const signedUrl = await getSignedUrl(s3, new GetObjectCommand(signedUrlParams));
+    const signedUrl = await getSignedUrl(s3, new GetObjectCommand(signedUrlParams), {
+      expiresIn: maxAge
+    });
     return { key, signedUrl };
   } catch (error) {
     logger.error('S3 upload failed:', error);
