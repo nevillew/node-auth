@@ -284,13 +284,18 @@ router.post('/token', tokenHandler, (req, res) => {
 // Machine to machine token generation
 router.post('/m2m/token', authenticateHandler, async (req, res) => {
   try {
-    const { clientId, scopes } = req.body;
+    const { clientId, scopes, tenantId } = req.body;
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenantId is required for M2M tokens' });
+    }
 
     // Verify client exists and is authorized for M2M
     const client = await OAuthClient.findOne({ 
       where: { 
         clientId,
-        type: 'machine'
+        type: 'machine',
+        tenantId
       }
     });
 
@@ -310,12 +315,13 @@ router.post('/m2m/token', authenticateHandler, async (req, res) => {
       });
     }
 
-    // Generate token with limited lifetime
+    // Generate token with limited lifetime and tenant scope
     const token = await oauth2Server.generateToken({
       client,
       scope: scopes.join(' '),
       type: 'm2m',
-      expiresIn: 3600 // 1 hour
+      expiresIn: 3600, // 1 hour
+      tenantId // Include tenant ID in token payload
     });
 
     // Create audit log
@@ -324,6 +330,7 @@ router.post('/m2m/token', authenticateHandler, async (req, res) => {
       event: 'M2M_TOKEN_GENERATED',
       details: {
         clientId: client.id,
+        tenantId,
         scopes,
         expiresAt: token.accessTokenExpiresAt
       },
