@@ -72,12 +72,47 @@ class TenantController {
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      await tenant.update({
-        name,
-        features,
-        securityPolicy,
-        status
+      // Create update object with only provided fields
+      const updates = {};
+      if (name) updates.name = name;
+      if (features) updates.features = { ...tenant.features, ...features };
+      if (securityPolicy) {
+        updates.securityPolicy = { 
+          ...tenant.securityPolicy, 
+          ...securityPolicy 
+        };
+      }
+      if (status) updates.status = status;
+
+      // Apply updates
+      await tenant.update(updates);
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'TENANT_UPDATED',
+        details: {
+          tenantId: tenant.id,
+          updates
+        },
+        severity: 'medium'
       });
+
+      // Notify admins
+      const admins = await TenantUser.findAll({
+        where: {
+          tenantId: tenant.id,
+          roles: { [Op.contains]: ['admin'] }
+        },
+        include: [User]
+      });
+
+      await Promise.all(admins.map(admin => 
+        notificationService.sendSystemNotification(
+          admin.userId,
+          `Tenant ${tenant.name} was updated by ${req.user.name}`
+        )
+      ));
 
       res.json(tenant);
     } catch (error) {
