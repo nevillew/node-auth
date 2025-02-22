@@ -7,7 +7,7 @@ async function tenantMiddleware(req, res, next) {
   const cacheKey = `tenant:${tenantId}`;
   
   // Try to get cached connection
-  const cachedConnection = await redisClient.get(cacheKey);
+  const cachedConnection = await redisClient.getWithNamespace(cacheKey);
   
   if (cachedConnection) {
     // Refresh TTL on cache hit
@@ -25,14 +25,16 @@ async function tenantMiddleware(req, res, next) {
     req.tenantDb = await getTenantConnection(tenantId);
       
     // Cache the connection details with 1 hour TTL
-    await redisClient.setEx(
+    await redisClient.setWithNamespace(
       cacheKey,
-      3600, // 1 hour TTL
       JSON.stringify({
         tenantId,
         databaseUrl: req.tenantDb.config.databaseUrl,
         createdAt: new Date().toISOString()
-      })
+      }),
+      {
+        EX: 3600 // 1 hour TTL
+      }
     );
       
     next();
