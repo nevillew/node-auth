@@ -37,7 +37,11 @@ router.post('/:id/deactivate', authenticateHandler, userController.deactivate);
 
 // Profile management
 router.get('/:id/profile', authenticateHandler, userController.getProfile);
-router.put('/:id/profile', authenticateHandler, userController.updateProfile);
+router.put('/:id/profile', 
+  authenticateHandler,
+  upload.single('avatar'),
+  userController.updateProfile
+);
 
 // Account settings
 router.get('/:id/preferences', authenticateHandler, userController.getPreferences);

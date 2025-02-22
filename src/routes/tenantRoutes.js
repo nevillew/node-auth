@@ -13,7 +13,11 @@ router.post('/',
   tenantController.create
 );
 router.get('/:id', authenticateHandler, tenantController.get);
-router.put('/:id', authenticateHandler, tenantController.update);
+router.put('/:id', 
+  authenticateHandler,
+  upload.single('logo'),
+  tenantController.update
+);
 router.post('/:id/suspend', authenticateHandler, tenantController.suspend);
 router.delete('/:id', authenticateHandler, tenantController.delete);
 router.post('/:id/restore', authenticateHandler, tenantController.restore);

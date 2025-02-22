@@ -30,7 +30,14 @@ module.exports = (sequelize, DataTypes) => {
       unique: true,
       allowNull: false
     },
-    logo: DataTypes.STRING,
+    logo: {
+      type: DataTypes.STRING,
+      validate: {
+        isUrl: {
+          msg: 'Logo must be a valid URL'
+        }
+      }
+    },
     colors: DataTypes.JSON,
     features: DataTypes.JSON,
     securityPolicy: {

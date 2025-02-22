@@ -206,6 +206,12 @@ class TenantController {
       const { name, features, securityPolicy, status } = req.body;
       const tenant = await Tenant.findByPk(req.params.id);
       
+      // Handle logo upload if present
+      if (req.file) {
+        const logoUrl = await uploadToS3(req.file, 'tenant-logos');
+        updates.logo = logoUrl;
+      }
+      
       if (!tenant) {
         return res.status(404).json({ error: 'Tenant not found' });
       }

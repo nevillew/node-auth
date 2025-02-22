@@ -50,7 +50,14 @@ module.exports = (sequelize, DataTypes) => {
     },
     passkeyRegistrationStartedAt: DataTypes.DATE,
     name: DataTypes.STRING,
-    avatar: DataTypes.STRING,
+    avatar: {
+      type: DataTypes.STRING,
+      validate: {
+        isUrl: {
+          msg: 'Avatar must be a valid URL'
+        }
+      }
+    },
     googleId: {
       type: DataTypes.STRING,
       unique: true
