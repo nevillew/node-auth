@@ -72,6 +72,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },
+    twoFactorPendingVerification: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    twoFactorBackupCodes: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      defaultValue: []
+    },
     emailVerified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false

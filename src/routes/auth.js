@@ -311,42 +311,43 @@ router.post('/logout', authenticateHandler, async (req, res) => {
 
 // 2FA setup
 router.post('/2fa/setup', authenticateHandler, async (req, res) => {
-  const user = await User.findByPk(req.user.id);
-  
-  const secret = speakeasy.generateSecret({
-    name: `Multi-Tenant App (${user.email})`
-  });
-
-  await user.update({
-    twoFactorSecret: secret.base32,
-    twoFactorEnabled: false
-  });
-
-  qrcode.toDataURL(secret.otpauth_url, (err, data_url) => {
-    res.json({
-      secret: secret.base32,
-      qrCode: data_url
+  try {
+    const user = await User.findByPk(req.user.id);
+    const result = await twoFactorService.generateSecret(user);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ 
+      error: error.message,
+      code: 'TWO_FACTOR_SETUP_FAILED'
     });
-  });
+  }
 });
 
-// 2FA verify
+// 2FA verify setup
 router.post('/2fa/verify', authenticateHandler, async (req, res) => {
-  const { token } = req.body;
-  const user = await User.findByPk(req.user.id);
-
-  const verified = speakeasy.totp.verify({
-    secret: user.twoFactorSecret,
-    encoding: 'base32',
-    token
-  });
-
-  if (verified) {
-    await user.update({ twoFactorEnabled: true });
-    return res.json({ success: true });
+  try {
+    const { token } = req.body;
+    const user = await User.findByPk(req.user.id);
+    
+    const verified = await twoFactorService.verifySetup(user, token);
+    
+    if (verified) {
+      return res.json({ 
+        success: true,
+        message: '2FA enabled successfully'
+      });
+    }
+    
+    res.status(400).json({ 
+      error: 'Invalid verification code',
+      code: 'INVALID_2FA_TOKEN'
+    });
+  } catch (error) {
+    res.status(400).json({ 
+      error: error.message,
+      code: 'TWO_FACTOR_VERIFICATION_FAILED'
+    });
   }
-
-  res.status(400).json({ error: 'Invalid token' });
 });
 
 // 2FA login
