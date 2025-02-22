@@ -71,11 +71,26 @@ class RoleController {
     const t = await sequelize.transaction();
     try {
       const { name, description, scopes, permissions } = req.body;
-      const role = await Role.findByPk(req.params.id, { transaction: t });
+      const role = await Role.findByPk(req.params.id, { 
+        include: [
+          {
+            model: User,
+            attributes: ['id', 'email', 'name']
+          },
+          Permission
+        ],
+        transaction: t 
+      });
 
       if (!role) {
         await t.rollback();
         throw new AppError('Role not found', 404);
+      }
+
+      // Check if user has permission to modify this role
+      if (role.isDefault && !req.user.hasScope('admin')) {
+        await t.rollback();
+        throw new AppError('Cannot modify default role without admin scope', 403);
       }
 
       // Check for duplicate name if name is being changed
@@ -95,6 +110,12 @@ class RoleController {
         }
       }
 
+      // Track changes for audit
+      const changes = {};
+      if (name && name !== role.name) changes.name = { from: role.name, to: name };
+      if (description && description !== role.description) changes.description = { from: role.description, to: description };
+      if (scopes) changes.scopes = { from: role.scopes, to: scopes };
+
       // Update role
       await role.update({
         name: name || role.name,
@@ -104,6 +125,15 @@ class RoleController {
 
       // Update permissions if provided
       if (permissions) {
+        const currentPermissions = role.Permissions.map(p => p.id);
+        const added = permissions.filter(p => !currentPermissions.includes(p));
+        const removed = currentPermissions.filter(p => !permissions.includes(p));
+
+        changes.permissions = {
+          added,
+          removed
+        };
+
         await RolePermission.destroy({
           where: { roleId: role.id },
           transaction: t
@@ -126,10 +156,19 @@ class RoleController {
         event: 'ROLE_UPDATED',
         details: {
           roleId: role.id,
-          updates: { name, description, scopes, permissions }
+          changes,
+          affectedUsers: role.Users.length
         },
         severity: 'medium'
       }, { transaction: t });
+
+      // Notify affected users
+      await Promise.all(role.Users.map(user => 
+        notificationService.sendSystemNotification(
+          user.id,
+          `The role "${role.name}" has been updated by ${req.user.name}`
+        )
+      ));
 
       await t.commit();
 
