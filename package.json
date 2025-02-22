@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest",
+    "test": "jest --detectOpenHandles --forceExit",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "migrate": "sequelize-cli db:migrate",
     "seed": "sequelize-cli db:seed:all"
   },
@@ -41,10 +43,14 @@
     "zod": "^3.x"
   },
   "devDependencies": {
+    "@types/jest": "^29.x",
     "@types/node": "^18.x",
+    "@types/supertest": "^6.x",
     "dotenv": "^16.x",
     "jest": "^29.x",
+    "jest-environment-node": "^29.x",
     "nodemon": "^3.x",
-    "sequelize-cli": "^6.6.2"
+    "sequelize-cli": "^6.6.2",
+    "supertest": "^6.x"
   }
 }
