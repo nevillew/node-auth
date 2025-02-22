@@ -191,6 +191,41 @@ class TwoFactorService {
       throw new Error('Failed to generate new backup codes');
     }
   }
+
+  async disable(user, currentPassword) {
+    try {
+      // Verify current password
+      const validPassword = await bcrypt.compare(currentPassword, user.password);
+      if (!validPassword) {
+        throw new Error('Invalid password');
+      }
+
+      if (!user.twoFactorEnabled) {
+        throw new Error('2FA is not enabled');
+      }
+
+      await user.update({
+        twoFactorSecret: null,
+        twoFactorEnabled: false,
+        twoFactorBackupCodes: [],
+        twoFactorLastVerifiedAt: null
+      });
+
+      await SecurityAuditLog.create({
+        userId: user.id,
+        event: 'TWO_FACTOR_DISABLED',
+        severity: 'high',
+        details: {
+          method: 'TOTP'
+        }
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('2FA disable failed:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new TwoFactorService();

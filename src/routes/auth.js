@@ -349,6 +349,26 @@ router.post('/2fa/verify', authenticateHandler, async (req, res) => {
   }
 });
 
+// Disable 2FA
+router.post('/2fa/disable', authenticateHandler, async (req, res) => {
+  try {
+    const { currentPassword } = req.body;
+    const user = await User.findByPk(req.user.id);
+    
+    await twoFactorService.disable(user, currentPassword);
+    
+    res.json({ 
+      success: true,
+      message: '2FA disabled successfully'
+    });
+  } catch (error) {
+    res.status(400).json({ 
+      error: error.message,
+      code: 'TWO_FACTOR_DISABLE_FAILED'
+    });
+  }
+});
+
 // 2FA login
 router.post('/2fa/login', async (req, res) => {
   const { email, password, token } = req.body;
