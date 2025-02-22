@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  password      String?
+  name          String?
+  avatar        String?
+  googleId      String?      @unique
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  tenantUsers   TenantUser[]
+  oauthTokens   OAuthToken[]
+}
+
+model OAuthClient {
+  id            String       @id @default(uuid())
+  clientId      String       @unique
+  clientSecret  String
+  grants        String[]
+  redirectUris  String[]
+  tokens        OAuthToken[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model OAuthToken {
+  id                    String       @id @default(uuid())
+  accessToken           String       @unique
+  accessTokenExpiresAt  DateTime
+  refreshToken          String?      @unique
+  refreshTokenExpiresAt DateTime?
+  client               OAuthClient   @relation(fields: [clientId], references: [id])
+  clientId             String
+  user                 User?         @relation(fields: [userId], references: [id])
+  userId               String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model TenantUser {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  roles     String[]
+  user      User     @relation(fields: [userId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, tenantId])
+}
+
+model Tenant {
+  id            String       @id @default(uuid())
+  slug          String       @unique
+  name          String
+  databaseUrl   String       @unique
+  logo          String?
+  colors        Json?
+  features      Json?
+  securityPolicy Json?
+  status        String       @default("active")
+  users         TenantUser[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
