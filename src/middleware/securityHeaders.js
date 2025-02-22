@@ -1,8 +1,11 @@
 const helmet = require('helmet');
 const crypto = require('crypto');
 const { generateCsrfToken } = require('./csrf');
+const sanitizeMiddleware = require('./sanitize');
 
 module.exports = (app) => {
+  // Add sanitization middleware
+  app.use(sanitizeMiddleware);
   // Add CSRF token generation
   app.use(generateCsrfToken);
   
