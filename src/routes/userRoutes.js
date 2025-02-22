@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { authenticateHandler } = require('../middleware/auth');
+const { upload } = require('../middleware/fileUpload');
 
 // User management routes
 router.post('/', 
