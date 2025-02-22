@@ -348,6 +348,53 @@ router.post('/m2m/token', authenticateHandler, async (req, res) => {
   }
 });
 
+// List M2M tokens
+router.get('/m2m/tokens', authenticateHandler, async (req, res) => {
+  try {
+    const { clientId, active = true } = req.query;
+
+    const where = { 
+      type: 'm2m',
+      revoked: !active
+    };
+
+    if (clientId) {
+      where['$OAuthClient.clientId$'] = clientId;
+    }
+
+    const tokens = await OAuthToken.findAll({
+      where,
+      include: [{
+        model: OAuthClient,
+        attributes: ['clientId', 'name']
+      }],
+      attributes: [
+        'id',
+        'accessToken',
+        'createdAt',
+        'expiresAt',
+        'tenantId',
+        'scopes'
+      ]
+    });
+
+    res.json({
+      tokens: tokens.map(token => ({
+        id: token.id,
+        clientId: token.OAuthClient.clientId,
+        clientName: token.OAuthClient.name,
+        tenantId: token.tenantId,
+        scopes: token.scopes,
+        createdAt: token.createdAt,
+        expiresAt: token.expiresAt,
+        active: new Date() < new Date(token.expiresAt) && !token.revoked
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Revoke M2M token
 router.post('/m2m/token/revoke', authenticateHandler, async (req, res) => {
   try {
