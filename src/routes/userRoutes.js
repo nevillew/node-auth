@@ -3,6 +3,7 @@ const router = express.Router();
 const userController = require('../controllers/userController');
 const { authenticateHandler } = require('../middleware/auth');
 const { upload } = require('../middleware/fileUpload');
+const { csrfProtection } = require('../middleware/csrf');
 
 // User management routes
 router.post('/', 

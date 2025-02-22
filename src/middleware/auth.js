@@ -1,7 +1,14 @@
 const OAuth2Server = require('oauth2-server');
 const { oauth2Server } = require('../config/auth');
 
+const { validateCsrfToken } = require('./csrf');
+
 const authenticateHandler = async (req, res, next) => {
+  // Validate CSRF token for authenticated requests
+  if (req.headers.authorization) {
+    await validateCsrfToken(req, res, next);
+  }
+  
   try {
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);

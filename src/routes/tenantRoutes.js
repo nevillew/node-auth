@@ -3,6 +3,7 @@ const router = express.Router();
 const tenantController = require('../controllers/tenantController');
 const { authenticateHandler } = require('../middleware/auth');
 const { upload } = require('../middleware/fileUpload');
+const { csrfProtection } = require('../middleware/csrf');
 
 // Tenant management routes
 router.post('/', 

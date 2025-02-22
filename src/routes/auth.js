@@ -12,7 +12,7 @@ const emailService = require('../services/emailService');
 const router = express.Router();
 
 // Local authentication
-router.post('/login', async (req, res, next) => {
+router.post('/login', csrfProtection, async (req, res, next) => {
   try {
     const { email } = req.body;
     const user = await User.findOne({ where: { email } });
