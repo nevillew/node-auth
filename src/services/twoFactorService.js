@@ -1,12 +1,21 @@
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
 const { User, SecurityAuditLog } = require('../models');
+const { AppError } = require('../middleware/errorHandler');
 const logger = require('../config/logger');
+const sequelize = require('../config/database').sequelize;
 
 class TwoFactorService {
   async generateSecret(user) {
+    const t = await sequelize.transaction();
     try {
+      // Check if 2FA is already pending verification
+      if (user.twoFactorPendingVerification) {
+        throw new AppError('2FA setup already in progress', 400);
+      }
+
       const secret = speakeasy.generateSecret({
         name: `Multi-Tenant App (${user.email})`,
         length: 32 // Increased security
@@ -18,33 +27,36 @@ class TwoFactorService {
       );
 
       // Hash backup codes before storing
-      const hashedBackupCodes = backupCodes.map(code => 
-        crypto.createHash('sha256').update(code).digest('hex')
+      const hashedBackupCodes = await Promise.all(
+        backupCodes.map(code => bcrypt.hash(code, 10))
       );
 
+      // Update user with setup details
       await user.update({
         twoFactorSecret: secret.base32,
-        twoFactorEnabled: false,
-        twoFactorPendingVerification: true,
         twoFactorBackupCodes: hashedBackupCodes,
+        twoFactorPendingVerification: true,
         twoFactorSetupStartedAt: new Date()
-      });
+      }, { transaction: t });
 
-      const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
-
+      // Create security audit log
       await SecurityAuditLog.create({
         userId: user.id,
-        event: 'TWO_FACTOR_SETUP_INITIATED',
+        event: '2FA_SETUP_STARTED',
         severity: 'medium',
         details: {
           method: 'TOTP'
         }
-      });
+      }, { transaction: t });
+
+      const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
+
+      await t.commit();
 
       return {
         secret: secret.base32,
         qrCode: qrCodeUrl,
-        backupCodes
+        backupCodes // Return plain backup codes only once
       };
     } catch (error) {
       logger.error('2FA setup failed:', error);
@@ -110,57 +122,76 @@ class TwoFactorService {
   }
 
   async verify(user, token, type = 'totp') {
+    const t = await sequelize.transaction();
     try {
       if (!user.twoFactorEnabled) {
-        throw new Error('2FA not enabled');
+        throw new AppError('2FA not enabled', 400);
       }
 
       let verified = false;
+      let verificationDetails = {};
 
       if (type === 'totp') {
         verified = speakeasy.totp.verify({
           secret: user.twoFactorSecret,
           encoding: 'base32',
           token,
-          window: 2 // Allow 2 steps before/after for time drift
+          window: 2 // Allow 2 steps (60 seconds) of time drift
         });
+
+        verificationDetails.method = 'TOTP';
       } else if (type === 'backup') {
-        // Hash provided backup code
-        const hashedCode = crypto.createHash('sha256').update(token).digest('hex');
-        
-        // Check if code exists and remove it if valid
-        const backupCodes = user.twoFactorBackupCodes;
-        const index = backupCodes.indexOf(hashedCode);
-        
-        if (index !== -1) {
+        // Verify backup code
+        const isBackupCodeValid = await Promise.any(
+          user.twoFactorBackupCodes.map(async code => 
+            await bcrypt.compare(token, code)
+          )
+        );
+
+        if (isBackupCodeValid) {
           verified = true;
-          backupCodes.splice(index, 1);
-          await user.update({ twoFactorBackupCodes: backupCodes });
-          
-          // Log backup code usage
-          await SecurityAuditLog.create({
-            userId: user.id,
-            event: 'TWO_FACTOR_BACKUP_CODE_USED',
-            severity: 'high',
-            details: {
-              remainingCodes: backupCodes.length
-            }
-          });
+          // Remove used backup code
+          await user.update({
+            twoFactorBackupCodes: user.twoFactorBackupCodes.filter(
+              (_, index) => !isBackupCodeValid[index]
+            )
+          }, { transaction: t });
+
+          verificationDetails.method = 'BackupCode';
+          verificationDetails.remainingCodes = user.twoFactorBackupCodes.length - 1;
         }
       }
 
-      // Log verification attempt
+      if (!verified) {
+        // Create security audit log for failed attempt
+        await SecurityAuditLog.create({
+          userId: user.id,
+          event: '2FA_VERIFICATION_FAILED',
+          severity: 'medium',
+          details: {
+            type,
+            reason: 'Invalid code'
+          }
+        }, { transaction: t });
+
+        return false;
+      }
+
+      // Update last verification time
+      await user.update({
+        twoFactorLastVerifiedAt: new Date()
+      }, { transaction: t });
+
+      // Create security audit log
       await SecurityAuditLog.create({
         userId: user.id,
-        event: verified ? 'TWO_FACTOR_VERIFICATION_SUCCESS' : 'TWO_FACTOR_VERIFICATION_FAILED',
-        severity: verified ? 'low' : 'medium',
-        details: {
-          method: type,
-          successful: verified
-        }
-      });
+        event: '2FA_VERIFICATION_SUCCESS',
+        severity: 'low',
+        details: verificationDetails
+      }, { transaction: t });
 
-      return verified;
+      await t.commit();
+      return true;
     } catch (error) {
       logger.error('2FA verification failed:', error);
       throw error;
