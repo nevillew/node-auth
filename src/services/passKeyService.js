@@ -166,10 +166,14 @@ class PassKeyService {
         userId: user.id,
         event: 'PASSKEY_REGISTRATION_FAILED',
         details: {
-          error: error.message
+          error: error.message,
+          attempts: await redisClient.incr(`passkey-registration-attempts:${user.id}`)
         },
         severity: 'high'
       });
+
+      // Set TTL for attempts counter if not exists
+      await redisClient.expire(`passkey-registration-attempts:${user.id}`, 3600); // 1 hour
 
       throw new Error('Passkey registration failed: ' + error.message);
     }
