@@ -7,16 +7,7 @@ const nodemailer = require('nodemailer');
 const { tokenHandler } = require('../middleware/auth');
 const { User } = require('../models');
 
-// Email transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: process.env.EMAIL_PORT,
-  secure: process.env.EMAIL_SECURE === 'true',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
-});
+const emailService = require('../services/emailService');
 const router = express.Router();
 
 // Local authentication
@@ -137,12 +128,11 @@ router.post('/verify-email', async (req, res) => {
 
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
     
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: user.email,
-      subject: 'Verify your email address',
-      html: `Please click this link to verify your email: <a href="${verificationUrl}">${verificationUrl}</a>`
-    });
+    await emailService.sendVerificationEmail(
+      user.email,
+      user.name,
+      verificationUrl
+    );
 
     res.json({ message: 'Verification email sent' });
   } catch (error) {
@@ -194,12 +184,11 @@ router.post('/reset-password', async (req, res) => {
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
     
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: user.email,
-      subject: 'Password Reset Request',
-      html: `Please click this link to reset your password: <a href="${resetUrl}">${resetUrl}</a>`
-    });
+    await emailService.sendPasswordResetEmail(
+      user.email,
+      user.name,
+      resetUrl
+    );
 
     res.json({ message: 'Password reset email sent' });
   } catch (error) {
