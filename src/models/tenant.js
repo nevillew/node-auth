@@ -19,7 +19,38 @@ module.exports = (sequelize, DataTypes) => {
     slug: {
       type: DataTypes.STRING,
       unique: true,
+      allowNull: false,
+      validate: {
+        is: /^[a-z0-9-]+$/i
+      }
+    },
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        len: [2, 100]
+      }
+    },
+    databaseUrl: {
+      type: DataTypes.STRING,
+      unique: true,
       allowNull: false
+    },
+    logo: {
+      type: DataTypes.STRING,
+      validate: {
+        isUrl: {
+          msg: 'Logo must be a valid URL'
+        }
+      }
+    },
+    colors: {
+      type: DataTypes.JSON,
+      defaultValue: {}
+    },
+    features: {
+      type: DataTypes.JSON,
+      defaultValue: {}
     },
     securityPolicy: {
       type: DataTypes.JSON,
@@ -143,7 +174,10 @@ module.exports = (sequelize, DataTypes) => {
       },
     status: {
       type: DataTypes.ENUM('active', 'suspended', 'pending_deletion'),
-      defaultValue: 'active'
+      defaultValue: 'active',
+      validate: {
+        isIn: [['active', 'suspended', 'pending_deletion']]
+      }
     },
     deletionRequestedAt: {
       type: DataTypes.DATE,
@@ -151,11 +185,22 @@ module.exports = (sequelize, DataTypes) => {
     },
     deletionScheduledAt: {
       type: DataTypes.DATE,
-      allowNull: true
+      allowNull: true,
+      validate: {
+        isAfterRequestedAt(value) {
+          if (value && this.deletionRequestedAt && value <= this.deletionRequestedAt) {
+            throw new Error('Scheduled deletion date must be after requested date');
+          }
+        }
+      }
     },
     gracePeriodDays: {
       type: DataTypes.INTEGER,
-      defaultValue: 7
+      defaultValue: 7,
+      validate: {
+        min: 1,
+        max: 30
+      }
     },
     settings: {
       type: DataTypes.JSON,
@@ -167,7 +212,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     onboardingStatus: {
       type: DataTypes.ENUM('pending', 'in_progress', 'completed'),
-      defaultValue: 'pending'
+      defaultValue: 'pending',
+      validate: {
+        isIn: [['pending', 'in_progress', 'completed']]
+      }
     },
     createdAt: {
       type: DataTypes.DATE,
