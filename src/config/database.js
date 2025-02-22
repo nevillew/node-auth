@@ -1,9 +1,39 @@
-const { PrismaClient } = require('@prisma/client');
+const { Sequelize } = require('sequelize');
+
+module.exports = {
+  development: {
+    username: process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    database: process.env.DB_NAME || 'multitenant_dev',
+    host: process.env.DB_HOST || '127.0.0.1',
+    dialect: 'postgres'
+  },
+  test: {
+    username: process.env.DB_USERNAME || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    database: process.env.DB_NAME || 'multitenant_test',
+    host: process.env.DB_HOST || '127.0.0.1',
+    dialect: 'postgres'
+  },
+  production: {
+    username: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    host: process.env.DB_HOST,
+    dialect: 'postgres',
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    }
+  }
+};
 
 class DatabaseManager {
   constructor() {
     this.tenantConnections = new Map();
-    this.defaultClient = new PrismaClient();
+    this.models = require('../models');
   }
 
   async getTenantConnection(tenantId) {
@@ -11,25 +41,22 @@ class DatabaseManager {
       return this.tenantConnections.get(tenantId);
     }
 
-    const tenant = await this.defaultClient.tenant.findUnique({
-      where: { id: tenantId },
-      select: { databaseUrl: true }
+    const tenant = await this.models.Tenant.findByPk(tenantId, {
+      attributes: ['databaseUrl']
     });
 
     if (!tenant) {
       throw new Error('Tenant not found');
     }
 
-    const prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: tenant.databaseUrl
-        }
-      }
+    const sequelize = new Sequelize(tenant.databaseUrl, {
+      dialect: 'postgres',
+      logging: false
     });
 
-    this.tenantConnections.set(tenantId, prisma);
-    return prisma;
+    await sequelize.authenticate();
+    this.tenantConnections.set(tenantId, sequelize);
+    return sequelize;
   }
 
   async createTenantDatabase(tenantSlug) {
@@ -38,4 +65,4 @@ class DatabaseManager {
   }
 }
 
-module.exports = new DatabaseManager();
+module.exports.manager = new DatabaseManager();

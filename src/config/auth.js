@@ -3,15 +3,13 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
-const { PrismaClient } = require('@prisma/client');
-
-const prisma = new PrismaClient();
+const { User, OAuthClient, OAuthToken } = require('../models');
 
 // OAuth2 Server Model
 const oauth2Model = {
   // Required for Password Grant
   getClient: async (clientId, clientSecret) => {
-    const client = await prisma.oAuthClient.findUnique({
+    const client = await OAuthClient.findOne({
       where: { clientId }
     });
     
@@ -28,7 +26,7 @@ const oauth2Model = {
 
   // Required for Password Grant
   getUser: async (username, password) => {
-    const user = await prisma.user.findUnique({
+    const user = await User.findOne({
       where: { email: username }
     });
 
@@ -42,8 +40,7 @@ const oauth2Model = {
 
   // Required for Password Grant and Client Credentials
   saveToken: async (token, client, user) => {
-    const accessToken = await prisma.oAuthToken.create({
-      data: {
+    const accessToken = await OAuthToken.create({
         accessToken: token.accessToken,
         accessTokenExpiresAt: token.accessTokenExpiresAt,
         refreshToken: token.refreshToken,
@@ -62,12 +59,12 @@ const oauth2Model = {
 
   // Required for Authentication
   getAccessToken: async (accessToken) => {
-    const token = await prisma.oAuthToken.findUnique({
+    const token = await OAuthToken.findOne({
       where: { accessToken },
-      include: {
-        client: true,
-        user: true
-      }
+      include: [
+        { model: OAuthClient, as: 'client' },
+        { model: User, as: 'user' }
+      ]
     });
 
     if (!token) return false;
@@ -77,18 +74,18 @@ const oauth2Model = {
 
   // Required for Refresh Token Grant
   getRefreshToken: async (refreshToken) => {
-    return await prisma.oAuthToken.findUnique({
+    return await OAuthToken.findOne({
       where: { refreshToken },
-      include: {
-        client: true,
-        user: true
-      }
+      include: [
+        { model: OAuthClient, as: 'client' },
+        { model: User, as: 'user' }
+      ]
     });
   },
 
   // Required for Refresh Token Grant
   revokeToken: async (token) => {
-    await prisma.oAuthToken.delete({
+    await OAuthToken.destroy({
       where: { refreshToken: token.refreshToken }
     });
     return true;

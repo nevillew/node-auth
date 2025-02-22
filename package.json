@@ -7,10 +7,10 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "jest",
-    "migrate": "prisma migrate deploy"
+    "migrate": "sequelize-cli db:migrate",
+    "seed": "sequelize-cli db:seed:all"
   },
   "dependencies": {
-    "@prisma/client": "^5.x",
     "express": "^4.x",
     "oauth2-server": "^3.x",
     "passport": "^0.6.x",
@@ -25,13 +25,16 @@
     "express-rate-limit": "^6.x",
     "express-validator": "^7.x",
     "multer": "^1.x",
-    "nodemailer": "^6.x"
+    "nodemailer": "^6.x",
+    "sequelize": "^6.x",
+    "pg": "^8.x",
+    "pg-hstore": "^2.x"
   },
   "devDependencies": {
-    "prisma": "^5.x",
     "jest": "^29.x",
     "nodemon": "^3.x",
     "@types/node": "^18.x",
-    "dotenv": "^16.x"
+    "dotenv": "^16.x",
+    "sequelize-cli": "^6.x"
   }
 }
