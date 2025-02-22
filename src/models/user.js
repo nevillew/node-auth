@@ -174,6 +174,10 @@ module.exports = (sequelize, DataTypes) => {
     },
     deactivationReason: DataTypes.STRING,
     lastLoginAt: DataTypes.DATE,
+    loginCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0
+    },
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE
   }, {

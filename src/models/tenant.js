@@ -63,6 +63,13 @@ module.exports = (sequelize, DataTypes) => {
           extendOnActivity: true,
           requireMFA: false
         },
+        twoFactor: {
+          required: false,
+          graceLogins: 3,
+          gracePeriodDays: 7,
+          allowBackupCodes: true,
+          allowRememberDevice: false
+        },
         ipRestrictions: {
           enabled: false,
           allowedIPs: [],

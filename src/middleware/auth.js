@@ -74,6 +74,23 @@ const authenticateHandler = async (req, res, next) => {
         throw new Error('Session expired');
       }
 
+      // Check 2FA requirement
+      if (tenant.securityPolicy.twoFactor?.required) {
+        const user = await User.findByPk(token.user.id);
+        if (!user.twoFactorEnabled) {
+          // Check if within grace period
+          const gracePeriodEnd = new Date(user.createdAt.getTime() + (tenant.securityPolicy.twoFactor.gracePeriodDays * 24 * 60 * 60 * 1000));
+          const graceLoginsLeft = tenant.securityPolicy.twoFactor.graceLogins - (user.loginCount || 0);
+          
+          if (new Date() > gracePeriodEnd && graceLoginsLeft <= 0) {
+            throw new AppError('2FA setup required to continue using this application', 403);
+          }
+          
+          // Increment login count
+          await user.increment('loginCount');
+        }
+      }
+
       // Extend session if configured
       if (tenant.securityPolicy.session.extendOnActivity) {
         await token.update({
