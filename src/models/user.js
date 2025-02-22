@@ -32,6 +32,11 @@ module.exports = (sequelize, DataTypes) => {
         }
       }
     },
+    passwordHistory: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      defaultValue: []
+    },
+    passwordChangedAt: DataTypes.DATE,
     failedLoginAttempts: {
       type: DataTypes.INTEGER,
       defaultValue: 0

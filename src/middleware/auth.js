@@ -81,7 +81,32 @@ const tokenHandler = async (req, res, next) => {
     const request = new OAuth2Server.Request(req);
     const response = new OAuth2Server.Response(res);
 
+    // Generate new token
     const token = await oauth2Server.token(request, response);
+    
+    // If this is a refresh token request, rotate the refresh token
+    if (request.body.grant_type === 'refresh_token') {
+      const oldRefreshToken = request.body.refresh_token;
+      
+      // Revoke old refresh token
+      await OAuthToken.update(
+        { revoked: true },
+        { where: { refreshToken: oldRefreshToken } }
+      );
+
+      // Generate new refresh token
+      token.refreshToken = crypto.randomBytes(40).toString('hex');
+      token.refreshTokenExpiresAt = new Date(Date.now() + (14 * 24 * 60 * 60 * 1000)); // 14 days
+      
+      await OAuthToken.create({
+        accessToken: token.accessToken,
+        accessTokenExpiresAt: token.accessTokenExpiresAt,
+        refreshToken: token.refreshToken,
+        refreshTokenExpiresAt: token.refreshTokenExpiresAt,
+        userId: token.user.id
+      });
+    }
+
     res.locals.oauth = { token };
     next();
   } catch (err) {

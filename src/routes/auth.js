@@ -299,7 +299,7 @@ router.post('/verify-email/confirm', async (req, res) => {
 });
 
 // Password reset request
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', passwordResetRateLimiter, async (req, res) => {
   const { email } = req.body;
   
   try {
