@@ -3,11 +3,16 @@ const { getTenantConnection, manager } = require('../config/database');
 async function tenantMiddleware(req, res, next) {
   // Check cache first
   const redisClient = await manager.getRedisClient();
-  const cacheKey = `tenant:${req.headers['x-tenant']}`;
-  const cachedTenant = await redisClient.get(cacheKey);
+  const tenantId = req.headers['x-tenant'];
+  const cacheKey = `tenant:${tenantId}`;
   
-  if (cachedTenant) {
-    req.tenantDb = JSON.parse(cachedTenant);
+  // Try to get cached connection
+  const cachedConnection = await redisClient.get(cacheKey);
+  
+  if (cachedConnection) {
+    // Refresh TTL on cache hit
+    await redisClient.expire(cacheKey, 3600); // 1 hour TTL
+    req.tenantDb = JSON.parse(cachedConnection);
     return next();
   }
   const tenantId = req.headers['x-tenant'];
@@ -18,6 +23,18 @@ async function tenantMiddleware(req, res, next) {
 
   try {
     req.tenantDb = await getTenantConnection(tenantId);
+      
+    // Cache the connection details with 1 hour TTL
+    await redisClient.setEx(
+      cacheKey,
+      3600, // 1 hour TTL
+      JSON.stringify({
+        tenantId,
+        databaseUrl: req.tenantDb.config.databaseUrl,
+        createdAt: new Date().toISOString()
+      })
+    );
+      
     next();
   } catch (error) {
     res.status(400).json({ error: 'Invalid tenant' });

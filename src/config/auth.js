@@ -12,7 +12,18 @@ const authRateLimiter = rateLimit({
   store: new RedisStore({
     prefix: 'auth_limit:',
     sendCommand: (...args) => manager.getRedisClient().then(client => client.sendCommand(args))
-  })
+  }),
+  keyGenerator: (req) => {
+    // Include tenant ID in rate limiting key if available
+    const tenantId = req.headers['x-tenant'] || 'global';
+    return `${tenantId}:${req.ip}`;
+  },
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many requests',
+      retryAfter: req.rateLimit.resetTime
+    });
+  }
 });
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;

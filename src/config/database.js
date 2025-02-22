@@ -55,6 +55,20 @@ class DatabaseManager {
     this.tenantConnections = new Map();
     this.redisClient = null;
     this.models = require('../models');
+    
+    // Cleanup on process exit
+    process.on('exit', this.cleanup.bind(this));
+    process.on('SIGINT', this.cleanup.bind(this));
+    process.on('SIGTERM', this.cleanup.bind(this));
+  }
+
+  async cleanup() {
+    if (this.redisClient) {
+      await this.redisClient.quit();
+    }
+    for (const [tenantId, connection] of this.tenantConnections) {
+      await connection.close();
+    }
   }
 
   async getRedisClient() {
