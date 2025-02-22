@@ -37,6 +37,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0
     },
     accountLockedUntil: DataTypes.DATE,
+    lastFailedLoginAt: DataTypes.DATE,
+    currentChallenge: DataTypes.STRING,
+    passKeyEnabled: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
     name: DataTypes.STRING,
     avatar: DataTypes.STRING,
     googleId: {

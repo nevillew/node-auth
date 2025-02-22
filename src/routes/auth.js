@@ -1,5 +1,6 @@
 const express = require('express');
 const passport = require('passport');
+const passKeyService = require('../services/passKeyService');
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const crypto = require('crypto');
@@ -11,13 +12,144 @@ const emailService = require('../services/emailService');
 const router = express.Router();
 
 // Local authentication
-router.post('/login', 
-  passport.authenticate('local'),
-  tokenHandler,
-  (req, res) => {
-    res.json(res.locals.oauth.token);
+router.post('/login', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ where: { email } });
+
+    if (user) {
+      // Check if account is locked
+      if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
+        const timeLeft = Math.ceil((user.accountLockedUntil - new Date()) / 1000 / 60);
+        return res.status(423).json({
+          error: `Account is locked. Try again in ${timeLeft} minutes.`
+        });
+      }
+
+      // Reset failed attempts if last failure was more than 30 minutes ago
+      if (user.lastFailedLoginAt && 
+          (new Date() - user.lastFailedLoginAt) > (30 * 60 * 1000)) {
+        await user.update({
+          failedLoginAttempts: 0,
+          lastFailedLoginAt: null
+        });
+      }
+    }
+
+    passport.authenticate('local', async (err, user, info) => {
+      if (err) return next(err);
+      
+      if (!user) {
+        // Increment failed attempts
+        if (user) {
+          const failedAttempts = user.failedLoginAttempts + 1;
+          const updates = {
+            failedLoginAttempts: failedAttempts,
+            lastFailedLoginAt: new Date()
+          };
+
+          // Lock account after 5 failed attempts
+          if (failedAttempts >= 5) {
+            updates.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+          }
+
+          await user.update(updates);
+        }
+        
+        return res.status(401).json(info);
+      }
+
+      // Reset failed attempts on successful login
+      await user.update({
+        failedLoginAttempts: 0,
+        lastFailedLoginAt: null,
+        accountLockedUntil: null
+      });
+
+      // Generate token
+      tokenHandler(req, res, () => {
+        res.json(res.locals.oauth.token);
+      });
+    })(req, res, next);
+  } catch (error) {
+    next(error);
   }
-);
+});
+
+// Passkey registration
+router.post('/passkey/register/options', authenticateHandler, async (req, res) => {
+  try {
+    const options = await passKeyService.generateRegistrationOptions(req.user);
+    res.json(options);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/passkey/register/verify', authenticateHandler, async (req, res) => {
+  try {
+    const verified = await passKeyService.verifyRegistration(req.user, req.body);
+    if (verified) {
+      await req.user.update({ passKeyEnabled: true });
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Verification failed' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Passkey authentication
+router.post('/passkey/login/options', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ 
+      where: { 
+        email,
+        passKeyEnabled: true 
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Passkey not enabled for this user' });
+    }
+
+    const options = await passKeyService.generateAuthenticationOptions(user);
+    res.json(options);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/passkey/login/verify', async (req, res) => {
+  try {
+    const { email, response } = req.body;
+    const user = await User.findOne({ 
+      where: { 
+        email,
+        passKeyEnabled: true 
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    const verified = await passKeyService.verifyAuthentication(user, response);
+    if (verified) {
+      // Generate token
+      req.user = user;
+      tokenHandler(req, res, () => {
+        res.json(res.locals.oauth.token);
+      });
+    } else {
+      res.status(401).json({ error: 'Authentication failed' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Google OAuth routes
 router.get('/google',
