@@ -20,6 +20,17 @@ const options = program.opts();
 async function analyzeFiles(pattern) {
   const files = glob.sync(pattern);
   const results = [];
+  
+  // Create progress bar
+  const progress = new cliProgress.SingleBar({
+    format: 'Analyzing |' + colors.cyan('{bar}') + '| {percentage}% | {value}/{total} files',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: true
+  });
+
+  // Initialize progress bar
+  progress.start(files.length, 0);
 
   for (const file of files) {
     try {
