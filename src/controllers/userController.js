@@ -40,15 +40,31 @@ class UserController {
     }
   }
 
-  // Get user details
+  // Get user details with profile and activity
   async get(req, res) {
     try {
       const user = await User.findByPk(req.params.id, {
         include: [{
           model: Tenant,
           through: { attributes: ['roles'] }
+        }, {
+          model: LoginHistory,
+          limit: 5,
+          order: [['createdAt', 'DESC']]
+        }, {
+          model: ActivityLog,
+          limit: 10,
+          order: [['createdAt', 'DESC']]
         }],
-        attributes: { exclude: ['password'] }
+        attributes: { 
+          exclude: ['password'],
+          include: [
+            'profile',
+            'preferences',
+            'emailPreferences',
+            'lastActivity'
+          ]
+        }
       });
       
       if (!user) {

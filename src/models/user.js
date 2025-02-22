@@ -66,7 +66,45 @@ module.exports = (sequelize, DataTypes) => {
     lastActivity: DataTypes.DATE,
     profile: {
       type: DataTypes.JSON,
-      defaultValue: {}
+      defaultValue: {
+        phoneNumber: null,
+        address: null,
+        timezone: 'UTC',
+        language: 'en',
+        bio: null,
+        socialLinks: {},
+        skills: [],
+        title: null,
+        department: null
+      }
+    },
+    preferences: {
+      type: DataTypes.JSON,
+      defaultValue: {
+        theme: 'light',
+        notifications: {
+          email: true,
+          push: true,
+          sms: false
+        },
+        accessibility: {
+          highContrast: false,
+          fontSize: 'normal'
+        },
+        privacy: {
+          profileVisibility: 'public',
+          activityVisibility: 'private'
+        }
+      }
+    },
+    emailPreferences: {
+      type: DataTypes.JSON,
+      defaultValue: {
+        marketing: true,
+        updates: true,
+        security: true,
+        newsletter: false
+      }
     },
     isActive: {
       type: DataTypes.BOOLEAN,
