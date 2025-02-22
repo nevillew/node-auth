@@ -436,23 +436,196 @@ class TenantController {
   }
 
   // Add user to tenant
-  async addUser(req, res) {
+  async inviteUser(req, res) {
+    const t = await sequelize.transaction();
     try {
-      const { userId, roles = ['user'] } = req.body;
-      const tenant = await Tenant.findByPk(req.params.id);
+      const { email, roles = ['user'] } = req.body;
+      const tenant = await Tenant.findByPk(req.params.id, { transaction: t });
       
       if (!tenant) {
+        await t.rollback();
         return res.status(404).json({ error: 'Tenant not found' });
       }
 
-      const tenantUser = await TenantUser.create({
-        userId,
-        tenantId: tenant.id,
-        roles
+      // Validate roles against tenant's available roles
+      const validRoles = await tenant.getRoles();
+      const validRoleNames = validRoles.map(role => role.name);
+      const invalidRoles = roles.filter(role => !validRoleNames.includes(role));
+      
+      if (invalidRoles.length > 0) {
+        await t.rollback();
+        return res.status(400).json({ 
+          error: `Invalid roles: ${invalidRoles.join(', ')}`,
+          validRoles: validRoleNames
+        });
+      }
+
+      // Check if user already exists
+      let user = await User.findOne({ 
+        where: { email },
+        transaction: t 
       });
 
-      res.status(201).json(tenantUser);
+      // Create user if they don't exist
+      if (!user) {
+        user = await User.create({
+          email,
+          status: 'pending',
+          profile: {
+            timezone: 'UTC',
+            language: 'en'
+          }
+        }, { transaction: t });
+      }
+
+      // Check if user is already in tenant
+      const existingTenantUser = await TenantUser.findOne({
+        where: {
+          tenantId: tenant.id,
+          userId: user.id
+        },
+        transaction: t
+      });
+
+      if (existingTenantUser) {
+        await t.rollback();
+        return res.status(409).json({ 
+          error: 'User already exists in tenant',
+          userId: user.id
+        });
+      }
+
+      // Create invitation
+      const invitationToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      
+      const invitation = await Invitation.create({
+        email,
+        token: invitationToken,
+        expiresAt,
+        tenantId: tenant.id,
+        invitedById: req.user.id,
+        roles
+      }, { transaction: t });
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        event: 'USER_INVITED',
+        details: {
+          tenantId: tenant.id,
+          invitedUserId: user.id,
+          roles,
+          expiresAt
+        },
+        severity: 'medium'
+      }, { transaction: t });
+
+      // Send invitation email
+      const invitationUrl = `${process.env.FRONTEND_URL}/accept-invitation?token=${invitationToken}`;
+      await emailService.sendEmail({
+        to: email,
+        subject: `You've been invited to join ${tenant.name}`,
+        template: 'user-invitation',
+        context: {
+          name: user.name || email,
+          tenantName: tenant.name,
+          invitedBy: req.user.name,
+          invitationUrl,
+          expiresAt: expiresAt.toLocaleDateString()
+        }
+      });
+
+      await t.commit();
+      res.status(201).json({
+        message: 'Invitation sent successfully',
+        invitationId: invitation.id,
+        expiresAt
+      });
     } catch (error) {
+      await t.rollback();
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  async acceptInvitation(req, res) {
+    const t = await sequelize.transaction();
+    try {
+      const { token, password } = req.body;
+      
+      // Find valid invitation
+      const invitation = await Invitation.findOne({
+        where: {
+          token,
+          status: 'pending',
+          expiresAt: { [Op.gt]: new Date() }
+        },
+        include: [Tenant],
+        transaction: t
+      });
+
+      if (!invitation) {
+        await t.rollback();
+        return res.status(400).json({ error: 'Invalid or expired invitation' });
+      }
+
+      // Find or create user
+      let user = await User.findOne({ 
+        where: { email: invitation.email },
+        transaction: t 
+      });
+
+      if (!user) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        user = await User.create({
+          email: invitation.email,
+          password: hashedPassword,
+          status: 'active',
+          profile: {
+            timezone: 'UTC',
+            language: 'en'
+          }
+        }, { transaction: t });
+      }
+
+      // Create tenant user relationship
+      await TenantUser.create({
+        userId: user.id,
+        tenantId: invitation.tenantId,
+        roles: invitation.roles
+      }, { transaction: t });
+
+      // Update invitation status
+      await invitation.update({
+        status: 'accepted',
+        acceptedAt: new Date()
+      }, { transaction: t });
+
+      // Create audit log
+      await SecurityAuditLog.create({
+        userId: user.id,
+        event: 'INVITATION_ACCEPTED',
+        details: {
+          tenantId: invitation.tenantId,
+          roles: invitation.roles
+        },
+        severity: 'medium'
+      }, { transaction: t });
+
+      // Send welcome email
+      await emailService.sendWelcomeEmail(
+        user.email,
+        user.name || user.email
+      );
+
+      await t.commit();
+      res.json({ 
+        message: 'Invitation accepted successfully',
+        userId: user.id,
+        tenantId: invitation.tenantId
+      });
+    } catch (error) {
+      await t.rollback();
       res.status(400).json({ error: error.message });
     }
   }
