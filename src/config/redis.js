@@ -1,4 +1,3 @@
-const redis = require('redis');
 const { createClient } = require('redis');
 const { promisify } = require('util');
 const logger = require('./logger');
