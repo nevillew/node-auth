@@ -79,15 +79,35 @@ const authenticateHandler = async (req, res, next) => {
         const user = await User.findByPk(token.user.id);
         if (!user.twoFactorEnabled) {
           // Check if within grace period
-          const gracePeriodEnd = new Date(user.createdAt.getTime() + (tenant.securityPolicy.twoFactor.gracePeriodDays * 24 * 60 * 60 * 1000));
+          const gracePeriodEnd = new Date(user.createdAt.getTime() + 
+            (tenant.securityPolicy.twoFactor.gracePeriodDays * 24 * 60 * 60 * 1000));
           const graceLoginsLeft = tenant.securityPolicy.twoFactor.graceLogins - (user.loginCount || 0);
           
           if (new Date() > gracePeriodEnd && graceLoginsLeft <= 0) {
-            throw new AppError('2FA setup required to continue using this application', 403);
+            // Create security audit log
+            await SecurityAuditLog.create({
+              userId: user.id,
+              event: 'TWO_FACTOR_GRACE_PERIOD_EXPIRED',
+              severity: 'high',
+              details: {
+                gracePeriodEnd,
+                totalLogins: user.loginCount
+              }
+            });
+            
+            throw new AppError('2FA setup required - grace period expired', 403);
           }
           
-          // Increment login count
+          // Increment login count and notify user
           await user.increment('loginCount');
+          const remainingLogins = tenant.securityPolicy.twoFactor.graceLogins - user.loginCount;
+          
+          if (remainingLogins <= 3) {
+            await notificationService.sendSystemNotification(
+              user.id,
+              `Please set up 2FA. You have ${remainingLogins} logins remaining before it becomes mandatory.`
+            );
+          }
         }
       }
 

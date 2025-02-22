@@ -371,27 +371,68 @@ router.post('/2fa/disable', authenticateHandler, async (req, res) => {
 
 // 2FA login
 router.post('/2fa/login', async (req, res) => {
-  const { email, password, token } = req.body;
-  
-  const user = await User.findOne({ where: { email } });
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+  try {
+    const { email, password, token, type = 'totp' } = req.body;
+    
+    const user = await User.findOne({ 
+      where: { email },
+      include: [{
+        model: Tenant,
+        through: { attributes: ['roles'] }
+      }]
+    });
+    
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-  const validPassword = await bcrypt.compare(password, user.password);
-  if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
 
-  if (user.twoFactorEnabled) {
-    const verified = speakeasy.totp.verify({
-      secret: user.twoFactorSecret,
-      encoding: 'base32',
-      token
+    // Check if 2FA is required by any of user's tenants
+    const requires2FA = user.Tenants.some(tenant => 
+      tenant.securityPolicy?.twoFactor?.required
+    );
+
+    if (user.twoFactorEnabled || requires2FA) {
+      if (!token) {
+        return res.status(401).json({ 
+          error: '2FA token required',
+          requires2FA: true
+        });
+      }
+
+      const verified = await twoFactorService.verify(user, token, type);
+      if (!verified) {
+        return res.status(401).json({ error: 'Invalid 2FA token' });
+      }
+
+      // Update last verification time
+      await user.update({ twoFactorLastVerifiedAt: new Date() });
+    }
+
+    // Generate token
+    const authToken = await generateToken(user);
+
+    // Create login history entry
+    await LoginHistory.create({
+      userId: user.id,
+      status: 'success',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
     });
 
-    if (!verified) return res.status(401).json({ error: 'Invalid 2FA token' });
+    res.json({ 
+      token: authToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        twoFactorEnabled: user.twoFactorEnabled
+      }
+    });
+  } catch (error) {
+    logger.error('Login failed:', error);
+    res.status(401).json({ error: 'Authentication failed' });
   }
-
-  // Generate and return token
-  const authToken = generateToken(user);
-  res.json({ token: authToken });
 });
 
 // Email verification
