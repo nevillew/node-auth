@@ -29,9 +29,9 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: [],
       validate: {
         isValidScopes(value) {
-          const validScopes = ['read', 'write', 'delete', 'admin', 'impersonate'];
-          if (value.some(scope => !validScopes.includes(scope))) {
-            throw new Error('Invalid scope provided');
+          const { validateScopes } = require('../auth/scopes');
+          if (!validateScopes(value)) {
+            throw new Error('One or more invalid scopes provided');
           }
         }
       }
