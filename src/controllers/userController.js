@@ -22,6 +22,117 @@ class UserController {
     };
   }
 
+  async _sanitizeUserInput(input) {
+    const { email, password, name, avatar } = input;
+    return {
+      email: validator.escape(email.trim()),
+      password,
+      name: validator.escape(name.trim()),
+      avatar: avatar ? validator.escape(avatar.trim()) : null
+    };
+  }
+
+  async _createUserRecord(input, transaction) {
+    const { email, password, name, avatar } = input;
+    
+    const existingUser = await User.findOne({ 
+      where: { email },
+      transaction 
+    });
+    
+    if (existingUser) {
+      throw new AppError('User already exists', 409);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    return User.create({
+      email,
+      password: hashedPassword,
+      name,
+      avatar,
+      profile: {
+        timezone: 'UTC',
+        language: 'en'
+      },
+      preferences: {
+        theme: 'light',
+        notifications: {
+          email: true,
+          push: true,
+          sms: false
+        }
+      }
+    }, { transaction });
+  }
+
+  async _generateVerificationToken(user, transaction) {
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    await user.update({
+      verificationToken,
+      verificationTokenExpires: verificationExpires
+    }, { transaction });
+
+    return verificationToken;
+  }
+
+  async _createAuditLog(user, requestUser, transaction) {
+    await SecurityAuditLog.create({
+      userId: user.id,
+      event: 'USER_CREATED',
+      details: {
+        createdBy: requestUser?.id || 'system',
+        method: 'manual'
+      },
+      severity: 'medium'
+    }, { transaction });
+  }
+
+  async _sendNotifications(user) {
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${user.verificationToken}`;
+    
+    return Promise.all([
+      emailService.sendVerificationEmail(user.email, user.name, verificationUrl),
+      emailService.sendWelcomeEmail(user.email, user.name),
+      slackService.sendMessage({
+        channel: '#user-activity',
+        text: `New user created: ${user.email}`,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*New User Created*\nEmail: ${user.email}\nName: ${user.name}`
+            }
+          }
+        ]
+      })
+    ]);
+  }
+
+  _formatUserResponse(user, impersonator) {
+    const response = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatar: user.avatar,
+      status: user.status
+    };
+
+    if (impersonator) {
+      response.isImpersonated = true;
+      response.impersonator = {
+        id: impersonator.id,
+        email: impersonator.email,
+        name: impersonator.name
+      };
+    }
+
+    return response;
+  }
+
   // Search users with filtering
   async list(req, res) {
     try {
@@ -420,112 +531,14 @@ class UserController {
   async create(req, res) {
     const t = await sequelize.transaction();
     try {
-      const { email, password, name, avatar } = req.body;
+      const sanitizedInput = this._sanitizeUserInput(req.body);
+      const user = await this._createUserRecord(sanitizedInput, t);
+      await this._generateVerificationToken(user, t);
+      await this._createAuditLog(user, req.user, t);
+      await this._sendNotifications(user);
       
-      // Validation moved to middleware
-      const validationResult = await validateUserCreation(req.body);
-      if (!validationResult.isValid) {
-        return res.status(400).json({
-          error: 'Validation failed',
-          details: validationResult.errors
-        });
-      }
-      
-      if (existingUser) {
-        await t.rollback();
-        return res.status(409).json({ error: 'User already exists' });
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-      
-      // Create user
-      const user = await User.create({
-        email,
-        password: hashedPassword,
-        name,
-        avatar,
-        profile: {
-          timezone: 'UTC',
-          language: 'en'
-        },
-        preferences: {
-          theme: 'light',
-          notifications: {
-            email: true,
-            push: true,
-            sms: false
-          }
-        }
-      }, { transaction: t });
-
-      // Generate verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-      
-      await user.update({
-        verificationToken,
-        verificationTokenExpires: verificationExpires
-      }, { transaction: t });
-
-      // Create audit log
-      await SecurityAuditLog.create({
-        userId: user.id,
-        event: 'USER_CREATED',
-        details: {
-          createdBy: req.user?.id || 'system',
-          method: 'manual'
-        },
-        severity: 'medium'
-      }, { transaction: t });
-
-      // Send verification and welcome emails
-      const verificationUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-      await Promise.all([
-        emailService.sendVerificationEmail(
-          user.email,
-          user.name,
-          verificationUrl
-        ),
-        emailService.sendWelcomeEmail(
-          user.email,
-          user.name
-        ),
-        slackService.sendMessage({
-          channel: '#user-activity',
-          text: `New user created: ${user.email}`,
-          blocks: [
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: `*New User Created*\nEmail: ${user.email}\nName: ${user.name}`
-              }
-            }
-          ]
-        })
-      ]);
-
       await t.commit();
-      
-      const response = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        status: user.status
-      };
-
-      if (req.impersonator) {
-        response.isImpersonated = true;
-        response.impersonator = {
-          id: req.impersonator.id,
-          email: req.impersonator.email,
-          name: req.impersonator.name
-        };
-      }
-
-      res.status(201).json(response);
+      res.status(201).json(this._formatUserResponse(user, req.impersonator));
     } catch (error) {
       res.status(400).json({ error: error.message });
     }

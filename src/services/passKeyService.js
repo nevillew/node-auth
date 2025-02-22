@@ -15,6 +15,18 @@ const expectedOrigin = process.env.ORIGIN || `https://${rpID}`;
 class PassKeyService {
   async generateRegistrationOptions(user) {
     try {
+      // Check rate limit
+      const rateLimitKey = `passkey-registration:${user.id}`;
+      const attempts = await redisClient.incr(rateLimitKey);
+      
+      if (attempts === 1) {
+        await redisClient.expire(rateLimitKey, 3600); // 1 hour window
+      }
+      
+      if (attempts > 3) {
+        throw new AppError('Too many registration attempts. Please try again later.', 429);
+      }
+
       // Validate user
       if (!user || !user.id) {
         throw new Error('Invalid user');

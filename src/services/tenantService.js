@@ -3,17 +3,30 @@ const { manager } = require('../config/database');
 class TenantService {
   async suspendTenant(tenantId) {
     const tenantDb = await manager.getTenantConnection(tenantId);
+    const t = await tenantDb.transaction();
     
-    await tenantDb.models.Tenant.update(
-      { status: 'suspended' },
-      { where: { id: tenantId } }
-    );
+    try {
+      await tenantDb.models.Tenant.update(
+        { status: 'suspended' },
+        { 
+          where: { id: tenantId },
+          transaction: t
+        }
+      );
 
-    // Optionally: Disable user logins
-    await tenantDb.models.User.update(
-      { isActive: false },
-      { where: { tenantId } }
-    );
+      await tenantDb.models.User.update(
+        { isActive: false },
+        { 
+          where: { tenantId },
+          transaction: t
+        }
+      );
+
+      await t.commit();
+    } catch (error) {
+      await t.rollback();
+      throw new AppError('Failed to suspend tenant', 500, error);
+    }
   }
 
   async reactivateTenant(tenantId) {
