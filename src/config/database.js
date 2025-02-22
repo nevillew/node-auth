@@ -87,9 +87,13 @@ module.exports = config;
 
 class DatabaseManager {
   constructor() {
-    this.tenantConnections = new Map();
+    this.tenantConnectionPools = new Map();
     this.redisClient = null;
     this.models = require('../models');
+    this.maxPoolSize = process.env.DB_MAX_POOL_SIZE || 10;
+    this.minPoolSize = process.env.DB_MIN_POOL_SIZE || 1;
+    this.idleTimeout = process.env.DB_IDLE_TIMEOUT || 10000; // 10 seconds
+    this.acquireTimeout = process.env.DB_ACQUIRE_TIMEOUT || 30000; // 30 seconds
     
     // Cleanup on process exit
     process.on('exit', this.cleanup.bind(this));
@@ -101,8 +105,14 @@ class DatabaseManager {
     if (this.redisClient) {
       await this.redisClient.quit();
     }
-    for (const [tenantId, connection] of this.tenantConnections) {
-      await connection.close();
+    
+    // Close all connection pools
+    for (const [tenantId, pool] of this.tenantConnectionPools) {
+      try {
+        await pool.close();
+      } catch (error) {
+        logger.error(`Error closing pool for tenant ${tenantId}:`, error);
+      }
     }
     
     // Clear scheduled deletion job
@@ -140,8 +150,18 @@ class DatabaseManager {
   }
 
   async getTenantConnection(tenantId) {
-    if (this.tenantConnections.has(tenantId)) {
-      return this.tenantConnections.get(tenantId);
+    // Check if we have a pool for this tenant
+    if (this.tenantConnectionPools.has(tenantId)) {
+      const pool = this.tenantConnectionPools.get(tenantId);
+      try {
+        // Test connection
+        await pool.authenticate();
+        return pool;
+      } catch (error) {
+        // Remove broken pool
+        this.tenantConnectionPools.delete(tenantId);
+        await pool.close();
+      }
     }
 
     const tenant = await this.models.Tenant.findByPk(tenantId, {
@@ -152,14 +172,24 @@ class DatabaseManager {
       throw new Error('Tenant not found');
     }
 
+    // Create new connection pool
     const sequelize = new Sequelize(tenant.databaseUrl, {
       dialect: 'postgres',
       logging: false,
       pool: {
-        max: 10,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
+        max: this.maxPoolSize,
+        min: this.minPoolSize,
+        acquire: this.acquireTimeout,
+        idle: this.idleTimeout,
+        evict: this.idleTimeout, // Remove idle connections
+        validate: async (connection) => {
+          try {
+            await connection.query('SELECT 1');
+            return true;
+          } catch (error) {
+            return false;
+          }
+        }
       },
       retry: {
         match: [
@@ -178,8 +208,38 @@ class DatabaseManager {
     });
 
     await sequelize.authenticate();
-    this.tenantConnections.set(tenantId, sequelize);
+    this.tenantConnectionPools.set(tenantId, sequelize);
+    
+    // Setup pool monitoring
+    this.setupPoolMonitoring(sequelize, tenantId);
+    
     return sequelize;
+  }
+
+  setupPoolMonitoring(sequelize, tenantId) {
+    const pool = sequelize.connectionManager.pool;
+
+    pool.on('acquire', (connection) => {
+      logger.debug(`Connection acquired for tenant ${tenantId}`);
+    });
+
+    pool.on('release', (connection) => {
+      logger.debug(`Connection released for tenant ${tenantId}`);
+    });
+
+    pool.on('destroy', (connection) => {
+      logger.debug(`Connection destroyed for tenant ${tenantId}`);
+    });
+
+    // Monitor pool size
+    setInterval(() => {
+      logger.debug(`Pool stats for tenant ${tenantId}:`, {
+        size: pool.size,
+        available: pool.available,
+        waiting: pool.waiting,
+        using: pool.using
+      });
+    }, 60000); // Every minute
   }
 
   async createTenantDatabase(tenantSlug) {
