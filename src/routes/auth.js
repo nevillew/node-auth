@@ -77,7 +77,7 @@ router.post('/login', async (req, res, next) => {
 });
 
 // Passkey registration
-router.post('/passkey/register/options', authenticateHandler, async (req, res) => {
+router.post('/passkey/register/options', authenticateHandler, passkeyRegistrationLimiter, async (req, res) => {
   try {
     const options = await passKeyService.generateRegistrationOptions(req.user);
     res.json(options);

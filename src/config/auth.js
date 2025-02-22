@@ -5,6 +5,27 @@ const RedisStore = require('rate-limit-redis');
 
 // Rate limiting configuration
 // Brute force protection for login attempts
+const passkeyRegistrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 attempts per hour
+  message: 'Too many passkey registration attempts, please try again later',
+  handler: async (req, res) => {
+    await SecurityAuditLog.create({
+      userId: req.user?.id,
+      event: 'PASSKEY_REGISTRATION_RATE_LIMIT',
+      severity: 'high',
+      details: {
+        ip: req.ip
+      }
+    });
+    res.status(429).json({ 
+      error: 'Too many registration attempts',
+      retryAfter: req.rateLimit.resetTime
+    });
+  },
+  keyGenerator: (req) => `${req.user?.id || req.ip}:passkey-registration`
+});
+
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 login attempts per window
