@@ -2,31 +2,52 @@ const express = require('express');
 const router = express.Router();
 const { manager } = require('../config/database');
 
+const rateLimit = require('express-rate-limit');
+
+// Rate limit health checks
+const healthCheckLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  message: 'Too many health check requests'
+});
+
 /**
- * Health check endpoint to verify system status
+ * Basic health check endpoint to verify system status
  * @route GET /health
  * @param {express.Request} req - Express request object
  * @param {express.Response} res - Express response object
  * @returns {Promise<void>} JSON response with health status
  */
-router.get('/health', async (req, res) => {
+router.get('/health', healthCheckLimiter, async (req, res) => {
+  const startTime = Date.now();
   const services = {
-    database: { status: 'unknown' },
-    redis: { status: 'unknown' },
-    redisReplica: { status: 'unknown' }
+    database: { status: 'unknown', latency: 0 },
+    redis: { status: 'unknown', latency: 0 },
+    redisReplica: { status: 'unknown', latency: 0 },
+    cache: { status: 'unknown', latency: 0 }
   };
   let isHealthy = true;
 
   try {
-    // Check database connection
+    // Check database connection with timeout
     const dbStart = Date.now();
     try {
-      await manager.sequelize.authenticate();
+      await Promise.race([
+        manager.sequelize.authenticate(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database timeout')), 5000)
+        )
+      ]);
       services.database = {
         status: 'healthy',
-        responseTime: Date.now() - dbStart,
-        connections: manager.sequelize.connectionManager.pool.size,
-        maxConnections: manager.sequelize.connectionManager.pool.max
+        latency: Date.now() - dbStart,
+        connections: {
+          active: manager.sequelize.connectionManager.pool.size,
+          idle: manager.sequelize.connectionManager.pool.idle,
+          max: manager.sequelize.connectionManager.pool.max,
+          waiting: manager.sequelize.connectionManager.pool.waiting
+        },
+        version: (await manager.sequelize.query('SELECT version()'))[0][0].version
       };
     } catch (error) {
       isHealthy = false;
@@ -37,17 +58,34 @@ router.get('/health', async (req, res) => {
       };
     }
 
-    // Check Redis primary
+    // Check Redis primary with timeout
     const redisStart = Date.now();
     try {
       const redisClient = await manager.getRedisClient();
-      const info = await redisClient.info();
+      const [info, memory, clients] = await Promise.all([
+        redisClient.info(),
+        redisClient.info('memory'),
+        redisClient.info('clients')
+      ]);
+      
       services.redis = {
         status: 'healthy',
-        responseTime: Date.now() - redisStart,
+        latency: Date.now() - redisStart,
         version: info.redis_version,
-        usedMemory: info.used_memory_human,
-        connectedClients: info.connected_clients
+        memory: {
+          used: memory.used_memory_human,
+          peak: memory.used_memory_peak_human,
+          fragmentation: memory.mem_fragmentation_ratio
+        },
+        clients: {
+          connected: parseInt(clients.connected_clients),
+          maxClients: parseInt(clients.maxclients),
+          blockedClients: parseInt(clients.blocked_clients)
+        },
+        keyspace: {
+          totalKeys: await redisClient.dbsize(),
+          expires: info.expired_keys
+        }
       };
     } catch (error) {
       isHealthy = false;
@@ -82,14 +120,30 @@ router.get('/health', async (req, res) => {
       delete services.redisReplica;
     }
 
-    // System metrics
+    // Enhanced system metrics
     const metrics = {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
-      memory: process.memoryUsage(),
-      cpu: process.cpuUsage(),
-      nodeVersion: process.version,
-      environment: process.env.NODE_ENV
+      memory: {
+        ...process.memoryUsage(),
+        freeSystemMemory: require('os').freemem(),
+        totalSystemMemory: require('os').totalmem()
+      },
+      cpu: {
+        ...process.cpuUsage(),
+        loadAvg: require('os').loadavg(),
+        cpus: require('os').cpus().length
+      },
+      process: {
+        pid: process.pid,
+        ppid: process.ppid,
+        platform: process.platform,
+        arch: process.arch,
+        nodeVersion: process.version,
+        environment: process.env.NODE_ENV
+      },
+      resourceUsage: process.resourceUsage(),
+      responseTime: Date.now() - startTime
     };
 
     const statusCode = isHealthy ? 200 : 503;
