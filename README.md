@@ -1,6 +1,6 @@
-# Multi-Tenant Application Platform
+# Authentication Service
 
-A secure, scalable multi-tenant application platform with comprehensive user management, authentication, and authorization features.
+Authentication service including user management, authentication, and authorization features.
 
 ## Table of Contents
 
