@@ -594,6 +594,44 @@ router.post('/logout', authenticateHandler, async (req, res) => {
   }
 });
 
+// Get all available scopes
+router.get('/scopes', authenticateHandler, async (req, res) => {
+  try {
+    const scopes = {
+      hierarchy: SCOPE_HIERARCHY,
+      flat: Array.from(FLAT_SCOPES)
+    };
+    res.json(scopes);
+  } catch (error) {
+    logger.error('Failed to fetch scopes:', error);
+    res.status(500).json({ error: 'Failed to fetch scopes' });
+  }
+});
+
+// Validate scopes
+router.post('/validate-scopes', authenticateHandler, async (req, res) => {
+  try {
+    const { userScopes, requiredScopes } = req.body;
+    
+    if (!Array.isArray(userScopes) || !Array.isArray(requiredScopes)) {
+      return res.status(400).json({ 
+        error: 'Invalid input',
+        message: 'userScopes and requiredScopes must be arrays'
+      });
+    }
+
+    const hasAccess = hasRequiredScopes(userScopes, requiredScopes);
+    
+    res.json({ 
+      hasAccess,
+      expandedScopes: userScopes.flatMap(scope => expandScope(scope))
+    });
+  } catch (error) {
+    logger.error('Scope validation failed:', error);
+    res.status(500).json({ error: 'Failed to validate scopes' });
+  }
+});
+
 // 2FA setup
 router.post('/2fa/setup', authenticateHandler, async (req, res) => {
   try {
