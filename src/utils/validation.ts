@@ -267,31 +267,35 @@ export const sanitizeObject = <T extends Record<string, unknown>>(
 ): Result<T> => {
   try {
     // Use functional approach with Object.entries and reduce
-    return Object.entries(obj).reduce<Result<Record<string, unknown>>>(
-      (accResult, [key, value]) => {
-        // Short-circuit if previous operation failed
-        if (!accResult.ok) return accResult;
-        
-        const fullKey = parentKey === 'root' ? key : `${parentKey}.${key}`;
-        const sanitizeResult = sanitizeValue(value, fullKey);
-        
-        if (!sanitizeResult.ok) {
-          return failure({
+    const sanitizeEntry = ([key, value]: [string, unknown]): Result<[string, unknown]> => {
+      const fullKey = parentKey === 'root' ? key : `${parentKey}.${key}`;
+      const sanitizeResult = sanitizeValue(value, fullKey);
+      
+      return sanitizeResult.ok 
+        ? success([key, sanitizeResult.value])
+        : failure({
             message: `Failed to sanitize property '${fullKey}'`,
             statusCode: 400,
             code: ErrorCode.OBJECT_VALIDATION_ERROR,
             details: sanitizeResult.error
           });
-        }
-        
-        // Create a new object with the sanitized value
-        return success({
-          ...accResult.value,
-          [key]: sanitizeResult.value
-        });
-      },
-      success({} as Record<string, unknown>)
-    ) as Result<T>;
+    };
+    
+    // Map entries to Results of sanitized entries
+    const entriesResults = Object.entries(obj).map(sanitizeEntry);
+    
+    // Find first failure if any
+    const firstFailure = entriesResults.find(result => !result.ok);
+    if (firstFailure && !firstFailure.ok) {
+      return firstFailure as Result<any>;
+    }
+    
+    // Combine all sanitized entries into a new object
+    const sanitizedEntries = entriesResults.map(result => 
+      (result as SuccessResult<[string, unknown]>).value
+    );
+    
+    return success(Object.fromEntries(sanitizedEntries) as T);
   } catch (err) {
     return failure({
       message: 'Error sanitizing object',

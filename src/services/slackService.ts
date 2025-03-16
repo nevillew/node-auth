@@ -1,5 +1,5 @@
 import { WebClient } from '@slack/web-api';
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
 
 // Types for Slack service

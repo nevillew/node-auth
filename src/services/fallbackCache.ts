@@ -22,6 +22,7 @@ export const get = async <T>(key: string): Promise<Result<T | undefined>> => {
     return failure({
       message: 'Error retrieving from fallback cache',
       statusCode: 500,
+      code: ErrorCode.CACHE_MISS,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
   }
@@ -42,6 +43,7 @@ export const set = async <T>(
     return failure({
       message: 'Error setting value in fallback cache',
       statusCode: 500,
+      code: ErrorCode.CACHE_ERROR,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
   }
@@ -58,6 +60,7 @@ export const del = async (key: string): Promise<Result<number>> => {
     return failure({
       message: 'Error deleting from fallback cache',
       statusCode: 500,
+      code: ErrorCode.CACHE_ERROR,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
   }
@@ -75,6 +78,7 @@ export const incr = async (key: string): Promise<Result<number>> => {
     return failure({
       message: 'Error incrementing value in fallback cache',
       statusCode: 500,
+      code: ErrorCode.CACHE_ERROR,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
   }
@@ -99,6 +103,7 @@ export const expire = async (
     return failure({
       message: 'Error setting expiration in fallback cache',
       statusCode: 500,
+      code: ErrorCode.CACHE_ERROR,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
   }

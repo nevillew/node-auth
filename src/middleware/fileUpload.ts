@@ -7,7 +7,7 @@ import path from 'path';
 import logger from '../config/logger';
 import { createAppError } from './errorHandler';
 import rateLimit from 'express-rate-limit';
-import { Result, success, failure, fromPromise } from '../utils/errors';
+import { Result, success, failure, fromPromise, ErrorCode } from '../utils/errors';
 
 // Types
 export interface FileUploadResult {

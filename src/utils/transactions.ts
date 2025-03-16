@@ -239,21 +239,40 @@ export const withTransactionChain = async <T, I = any>(
   options: TransactionOptions = {}
 ): Promise<Result<T>> => {
   return withTransaction(async (t) => {
-    // Use reduce to chain operations in a more functional way
-    // This is a pure functional approach to sequential async operations
-    const executeOperations = async (
-      ops: ReadonlyArray<(previousResult: any, t: Transaction) => Promise<Result<any>>>,
-      initialResult: Result<any>
-    ): Promise<Result<any>> => {
-      if (ops.length === 0) return initialResult;
-      if (!initialResult.ok) return initialResult;
-      
-      const [currentOp, ...remainingOps] = ops;
-      const nextResult = await currentOp(initialResult.value, t);
-      
-      return executeOperations(remainingOps, nextResult);
+    // Define a pure recursive function for executing operations
+    const executeOperation = async <R>(
+      operation: (data: any, transaction: Transaction) => Promise<Result<R>>,
+      data: any
+    ): Promise<Result<R>> => {
+      return operation(data, t);
     };
     
-    return executeOperations(operations, success(initialData)) as Promise<Result<T>>;
+    // Define a pure recursive function for chaining operations
+    const chainOperations = async <R>(
+      remainingOps: ReadonlyArray<(data: any, transaction: Transaction) => Promise<Result<any>>>,
+      currentData: any
+    ): Promise<Result<R>> => {
+      // Base case: no more operations
+      if (remainingOps.length === 0) {
+        return success(currentData) as Result<R>;
+      }
+      
+      // Get the next operation
+      const [nextOp, ...restOps] = remainingOps;
+      
+      // Execute the operation
+      const result = await executeOperation(nextOp, currentData);
+      
+      // If operation failed, return the error
+      if (!result.ok) {
+        return result as Result<R>;
+      }
+      
+      // Continue with the next operation
+      return chainOperations<R>(restOps, result.value);
+    };
+    
+    // Start the chain with the initial data
+    return chainOperations<T>(operations, initialData);
   }, externalTransaction, options);
 };
