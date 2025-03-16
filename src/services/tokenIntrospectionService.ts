@@ -1,10 +1,12 @@
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
 import * as fallbackCache from './fallbackCache';
+import { createRedisClient, releaseRedisClient } from '../config/redis';
 
-// We'll need to convert the redis client to TypeScript later
-// For now, use require for compatibility
-const { redisClient } = require('../config/redis');
+// Create a properly typed Redis client
+const getRedisClient = async () => {
+  return await createRedisClient();
+};
 
 // Types for the service
 interface TokenIntrospection {

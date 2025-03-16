@@ -24,16 +24,29 @@ interface ValidExtensions {
 }
 
 /**
- * Create S3 client (pure factory function)
+ * Create S3 client configuration (pure function)
  */
-export const createS3Client = (): S3Client => {
-  return new S3Client({
+export const createS3Config = (): {
+  region: string;
+  credentials: {
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
+} => {
+  return {
     region: process.env.AWS_REGION || 'us-east-1',
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
     }
-  });
+  };
+};
+
+/**
+ * Create S3 client (pure factory function)
+ */
+export const createS3Client = (): S3Client => {
+  return new S3Client(createS3Config());
 };
 
 // Create S3 client instance

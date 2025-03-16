@@ -39,8 +39,11 @@ const createCookieConfig = (httpOnly = false) => ({
 
 /**
  * Generate a new CSRF token (pure function)
+ * Using crypto for better randomness than UUID
  */
-const generateToken = (): string => uuidv4();
+const generateToken = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
 
 /**
  * Middleware to generate and set CSRF token

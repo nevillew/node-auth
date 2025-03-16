@@ -139,8 +139,16 @@ const handlePasskeyRegistrationOptions = async (req: AuthenticatedRequest, res: 
       return;
     }
     
-    const options = await passKeyService.generateRegistrationOptions(req.user);
-    res.json(options);
+    const result = await passKeyService.generatePasskeyRegistrationOptions(req.user);
+    
+    if (result.ok) {
+      res.json(result.value);
+    } else {
+      res.status(result.error.statusCode || 500).json({ 
+        error: result.error.message,
+        code: result.error.code || 'PASSKEY_REGISTRATION_ERROR'
+      });
+    }
   } catch (error) {
     res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -159,14 +167,14 @@ const handlePasskeyRegistrationVerify = async (req: AuthenticatedRequest, res: R
       return;
     }
     
-    const verified = await passKeyService.verifyRegistration(req.user, req.body);
-    if (verified) {
-      await req.user.update({ passKeyEnabled: true });
+    const result = await passKeyService.verifyPasskeyRegistration(req.user, req.body);
+    
+    if (result.ok) {
       res.json({ success: true });
     } else {
-      res.status(400).json({ 
-        error: 'Verification failed',
-        code: 'PASSKEY_VERIFICATION_FAILED'
+      res.status(result.error.statusCode || 400).json({ 
+        error: result.error.message,
+        code: result.error.code || 'PASSKEY_VERIFICATION_FAILED'
       });
     }
   } catch (error) {

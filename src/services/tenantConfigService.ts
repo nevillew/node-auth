@@ -1,9 +1,9 @@
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
+import { DatabaseManager } from '../config/database';
 
-// We'll need to convert the database manager to TypeScript later
-// For now, use require for compatibility
-const { manager } = require('../config/database');
+// Import the manager with proper typing
+import { manager } from '../config/database';
 
 // Types for tenant config
 interface TenantConnection {
@@ -11,6 +11,16 @@ interface TenantConnection {
     Tenant: any;
     [key: string]: any;
   };
+}
+
+// Type for tenant configuration
+interface TenantConfig {
+  [key: string]: unknown;
+}
+
+// Type for feature flags
+interface FeatureFlags {
+  [key: string]: boolean;
 }
 
 /**

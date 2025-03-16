@@ -207,39 +207,85 @@ export const sanitizeString = (input?: string): Result<string> => {
 };
 
 /**
- * Sanitize an object's string properties (pure function)
+ * Sanitize a value based on its type (pure function)
  * 
- * @param obj - Object with string properties to sanitize
+ * @param value - Value to sanitize
+ * @param key - Key path for nested objects
+ * @returns Result with sanitized value
+ */
+export const sanitizeValue = <T>(
+  value: T, 
+  key: string = 'root'
+): Result<T> => {
+  // Handle different types
+  if (value === null || value === undefined) {
+    return success(value);
+  }
+  
+  if (typeof value === 'string') {
+    return sanitizeString(value) as Result<any>;
+  }
+  
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return sanitizeObject(value as Record<string, unknown>, key) as Result<any>;
+  }
+  
+  if (Array.isArray(value)) {
+    // Map over array and sanitize each element
+    const sanitizedArray: Result<unknown>[] = value.map((item, index) => 
+      sanitizeValue(item, `${key}[${index}]`)
+    );
+    
+    // Check if any sanitization failed
+    const failedResult = sanitizedArray.find(result => !result.ok);
+    if (failedResult && !failedResult.ok) {
+      return failedResult as Result<any>;
+    }
+    
+    // Extract values from successful results
+    const sanitizedValues = sanitizedArray.map(result => 
+      result.ok ? result.value : null
+    );
+    
+    return success(sanitizedValues as T);
+  }
+  
+  // For other primitive types, return as is
+  return success(value);
+};
+
+/**
+ * Sanitize an object's properties (pure function)
+ * 
+ * @param obj - Object with properties to sanitize
+ * @param parentKey - Parent key for nested objects
  * @returns Sanitized object
  */
-export const sanitizeObject = <T extends Record<string, unknown>>(obj: T): Result<T> => {
+export const sanitizeObject = <T extends Record<string, unknown>>(
+  obj: T, 
+  parentKey: string = 'root'
+): Result<T> => {
   try {
     // Create a new object to maintain immutability
     const sanitized: Record<string, unknown> = {};
     
-    for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'string') {
-        const sanitizeResult = sanitizeString(value);
-        if (!sanitizeResult.ok) {
-          return sanitizeResult as Result<any>;
-        }
-        sanitized[key] = sanitizeResult.value;
-      } else if (value === null || value === undefined) {
-        sanitized[key] = value;
-      } else if (typeof value === 'object' && !Array.isArray(value)) {
-        const sanitizeResult = sanitizeObject<Record<string, unknown>>(value as Record<string, unknown>);
-        if (!sanitizeResult.ok) {
-          return failure({
-            message: `Failed to sanitize nested object at '${key}'`,
-            statusCode: 400,
-            code: ErrorCode.OBJECT_VALIDATION_ERROR,
-            details: sanitizeResult.error
-          });
-        }
-        sanitized[key] = sanitizeResult.value;
-      } else {
-        sanitized[key] = value;
+    // Process each entry in the object
+    const entries = Object.entries(obj);
+    
+    for (const [key, value] of entries) {
+      const fullKey = parentKey === 'root' ? key : `${parentKey}.${key}`;
+      const sanitizeResult = sanitizeValue(value, fullKey);
+      
+      if (!sanitizeResult.ok) {
+        return failure({
+          message: `Failed to sanitize property '${fullKey}'`,
+          statusCode: 400,
+          code: ErrorCode.OBJECT_VALIDATION_ERROR,
+          details: sanitizeResult.error
+        });
       }
+      
+      sanitized[key] = sanitizeResult.value;
     }
     
     return success(sanitized as T);
@@ -248,9 +294,37 @@ export const sanitizeObject = <T extends Record<string, unknown>>(obj: T): Resul
       message: 'Error sanitizing object',
       statusCode: 500,
       code: ErrorCode.VALIDATION_ERROR,
-      originalError: err instanceof Error ? err : new Error('Unknown error')
+      originalError: err instanceof Error ? err : new Error('Unknown error'),
+      source: 'sanitizeObject'
     });
   }
+};
+
+/**
+ * Transforms Zod errors into a structured format (pure function)
+ * 
+ * @param zodError - The Zod error to transform
+ * @returns Structured error object
+ */
+export const transformZodError = (zodError: z.ZodError): Record<string, string[]> => {
+  // Transform Zod errors into our application's format
+  const errors: ValidationError[] = zodError.errors.map(error => ({
+    path: error.path,
+    message: error.message
+  }));
+  
+  // Group errors by field for better UI display
+  const fieldErrors: Record<string, string[]> = {};
+  
+  errors.forEach(error => {
+    const path = error.path.join('.');
+    if (!fieldErrors[path]) {
+      fieldErrors[path] = [];
+    }
+    fieldErrors[path].push(error.message);
+  });
+  
+  return fieldErrors;
 };
 
 /**
@@ -274,21 +348,7 @@ export const validateWithSchema = <T>(
   } catch (err) {
     // Handle Zod validation errors
     if (err instanceof z.ZodError) {
-      // Transform Zod errors into our application's format
-      const errors: ValidationError[] = err.errors.map(error => ({
-        path: error.path,
-        message: error.message
-      }));
-      
-      // Group errors by field for better UI display
-      const fieldErrors: Record<string, string[]> = {};
-      errors.forEach(error => {
-        const path = error.path.join('.');
-        if (!fieldErrors[path]) {
-          fieldErrors[path] = [];
-        }
-        fieldErrors[path].push(error.message);
-      });
+      const fieldErrors = transformZodError(err);
       
       return failure({
         message: 'Validation error',

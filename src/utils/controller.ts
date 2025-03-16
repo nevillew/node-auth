@@ -102,13 +102,20 @@ export const getSortParams = (
 export const buildSearchCondition = (
   search: string | undefined,
   fields: string[]
-): any => {
+): Record<string, any> | null => {
   if (!search) return null;
   
+  // Create a sanitized search term
+  const sanitizedSearch = search.trim();
+  if (!sanitizedSearch) return null;
+  
+  // Map each field to a condition in a pure way
+  const fieldConditions = fields.map(field => ({
+    [field]: { [Op.iLike]: `%${sanitizedSearch}%` }
+  }));
+  
   return {
-    [Op.or]: fields.map(field => ({
-      [field]: { [Op.iLike]: `%${search}%` }
-    }))
+    [Op.or]: fieldConditions
   };
 };
 

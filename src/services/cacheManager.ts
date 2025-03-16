@@ -36,9 +36,13 @@ export class CacheManager {
    * @returns Cache key string
    */
   private getCacheKey(filePath: string, content: string): string {
+    // Create a new hash instance for each call to maintain purity
     const hash = crypto.createHash('sha256');
-    hash.update(content);
-    return path.join(this.cacheDir, `${path.basename(filePath)}.${hash.digest('hex')}.cache`);
+    const contentHash = hash.update(content).digest('hex');
+    const fileName = path.basename(filePath);
+    
+    // Construct the cache key in a pure way
+    return path.join(this.cacheDir, `${fileName}.${contentHash}.cache`);
   }
 
   /**
@@ -56,7 +60,8 @@ export class CacheManager {
         message: 'Failed to initialize cache',
         statusCode: 500,
         code: ErrorCode.CACHE_ERROR,
-        originalError: err instanceof Error ? err : new Error('Unknown error')
+        originalError: err instanceof Error ? err : new Error('Unknown error'),
+        source: 'CacheManager.initCache'
       });
     }
   }

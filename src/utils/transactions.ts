@@ -234,22 +234,25 @@ export const withTransactionAll = async <T>(
  */
 export const withTransactionChain = async <T, I = any>(
   initialData: I,
-  operations: ((previousResult: any, t: Transaction) => Promise<Result<any>>)[],
+  operations: ReadonlyArray<(previousResult: any, t: Transaction) => Promise<Result<any>>>,
   externalTransaction?: Transaction,
   options: TransactionOptions = {}
 ): Promise<Result<T>> => {
   return withTransaction(async (t) => {
-    let currentResult: Result<any> = success(initialData);
-    
-    for (const operation of operations) {
-      if (!currentResult.ok) {
-        return currentResult;
-      }
-      
-      // Execute next operation with the result of the previous one
-      currentResult = await operation(currentResult.value, t);
-    }
-    
-    return currentResult as Result<T>;
+    // Use reduce to chain operations in a more functional way
+    return operations.reduce(
+      async (previousPromise: Promise<Result<any>>, operation) => {
+        const previousResult = await previousPromise;
+        
+        // Short-circuit on failure
+        if (!previousResult.ok) {
+          return previousResult;
+        }
+        
+        // Execute next operation with the result of the previous one
+        return operation(previousResult.value, t);
+      },
+      Promise.resolve(success(initialData))
+    ) as Promise<Result<T>>;
   }, externalTransaction, options);
 };

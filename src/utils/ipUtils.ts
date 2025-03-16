@@ -94,7 +94,13 @@ export const normalizeIP = (ip: string): Result<string> => {
 /**
  * Check if an IP is in any of the provided CIDR ranges (pure function)
  */
-export const isIPInAnyRange = (ip: string, ranges: string[]): boolean => {
+export const isIPInAnyRange = (ip: string, ranges: readonly string[]): boolean => {
+  // Validate inputs first
+  if (!ip || !Array.isArray(ranges) || ranges.length === 0) {
+    return false;
+  }
+  
+  // Use functional some() to check if IP is in any range
   return ranges.some(range => isIPInRange(ip, range));
 };
 

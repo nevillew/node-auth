@@ -128,6 +128,70 @@ export const standardError = <T>(
 };
 
 /**
+ * Type for database error patterns
+ */
+interface DatabaseErrorPattern {
+  pattern: RegExp;
+  errorCode: ErrorCode;
+  message: string;
+  statusCode: number;
+}
+
+/**
+ * Database error patterns for pattern matching (pure data)
+ */
+const DATABASE_ERROR_PATTERNS: ReadonlyArray<DatabaseErrorPattern> = [
+  {
+    pattern: /foreign key constraint|violates foreign key/i,
+    errorCode: ErrorCode.FOREIGN_KEY_VIOLATION,
+    message: 'Foreign key constraint violation',
+    statusCode: 400
+  },
+  {
+    pattern: /unique constraint|duplicate key|already exists/i,
+    errorCode: ErrorCode.UNIQUE_CONSTRAINT_VIOLATION,
+    message: 'Unique constraint violation',
+    statusCode: 409
+  },
+  {
+    pattern: /check constraint|violates check/i,
+    errorCode: ErrorCode.CHECK_CONSTRAINT_VIOLATION,
+    message: 'Check constraint violation',
+    statusCode: 400
+  },
+  {
+    pattern: /deadlock|could not serialize/i,
+    errorCode: ErrorCode.DEADLOCK_ERROR,
+    message: 'Database deadlock detected',
+    statusCode: 409
+  },
+  {
+    pattern: /timeout|statement timeout/i,
+    errorCode: ErrorCode.DATABASE_TIMEOUT,
+    message: 'Database operation timed out',
+    statusCode: 503
+  },
+  {
+    pattern: /connection|connecting/i,
+    errorCode: ErrorCode.CONNECTION_ERROR,
+    message: 'Database connection error',
+    statusCode: 503
+  },
+  {
+    pattern: /transaction|rollback/i,
+    errorCode: ErrorCode.TRANSACTION_ERROR,
+    message: 'Database transaction error',
+    statusCode: 500
+  },
+  {
+    pattern: /serialization|serialize/i,
+    errorCode: ErrorCode.SERIALIZATION_ERROR,
+    message: 'Database serialization error',
+    statusCode: 409
+  }
+];
+
+/**
  * Maps database errors to appropriate standard error codes
  * 
  * This function implements pattern matching on database error messages
@@ -148,96 +212,19 @@ export const standardError = <T>(
  * }
  */
 export const databaseError = <T>(error: Error, source?: string): ErrorResult<T> => {
-  // Normalize the error message for easier pattern matching
-  const errorMessage = error.message.toLowerCase();
+  const errorMessage = error.message;
   
-  // Check for specific database error types using pattern matching
-  // This is a pure functional approach to categorizing errors
+  // Find matching error pattern using functional pattern matching
+  const matchedPattern = DATABASE_ERROR_PATTERNS.find(pattern => 
+    pattern.pattern.test(errorMessage)
+  );
   
-  // Foreign key violations
-  if (errorMessage.includes('foreign key constraint') || errorMessage.includes('violates foreign key')) {
+  if (matchedPattern) {
     return failure<T>({
-      message: 'Foreign key constraint violation',
-      statusCode: 400,
-      code: ErrorCode.FOREIGN_KEY_VIOLATION,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Unique constraint violations
-  if (errorMessage.includes('unique constraint') || errorMessage.includes('duplicate key') || errorMessage.includes('already exists')) {
-    return failure<T>({
-      message: 'Unique constraint violation',
-      statusCode: 409,
-      code: ErrorCode.UNIQUE_CONSTRAINT_VIOLATION,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Check constraint violations
-  if (errorMessage.includes('check constraint') || errorMessage.includes('violates check')) {
-    return failure<T>({
-      message: 'Check constraint violation',
-      statusCode: 400,
-      code: ErrorCode.CHECK_CONSTRAINT_VIOLATION,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Deadlocks
-  if (errorMessage.includes('deadlock') || errorMessage.includes('could not serialize')) {
-    return failure<T>({
-      message: 'Database deadlock detected',
-      statusCode: 409,
-      code: ErrorCode.DEADLOCK_ERROR,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Timeouts
-  if (errorMessage.includes('timeout') || errorMessage.includes('statement timeout')) {
-    return failure<T>({
-      message: 'Database operation timed out',
-      statusCode: 503,
-      code: ErrorCode.DATABASE_TIMEOUT,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Connection errors
-  if (errorMessage.includes('connection') || errorMessage.includes('connecting')) {
-    return failure<T>({
-      message: 'Database connection error',
-      statusCode: 503,
-      code: ErrorCode.CONNECTION_ERROR,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Transaction errors
-  if (errorMessage.includes('transaction') || errorMessage.includes('rollback')) {
-    return failure<T>({
-      message: 'Database transaction error',
-      statusCode: 500,
-      code: ErrorCode.TRANSACTION_ERROR,
-      details: { originalError: error.message },
-      source
-    });
-  }
-  
-  // Serialization errors
-  if (errorMessage.includes('serialization') || errorMessage.includes('serialize')) {
-    return failure<T>({
-      message: 'Database serialization error',
-      statusCode: 409,
-      code: ErrorCode.SERIALIZATION_ERROR,
-      details: { originalError: error.message },
+      message: matchedPattern.message,
+      statusCode: matchedPattern.statusCode,
+      code: matchedPattern.errorCode,
+      details: { originalError: errorMessage },
       source
     });
   }
@@ -247,7 +234,7 @@ export const databaseError = <T>(error: Error, source?: string): ErrorResult<T> 
     message: 'Database query failed',
     statusCode: 500,
     code: ErrorCode.QUERY_ERROR,
-    details: { originalError: error.message },
+    details: { originalError: errorMessage },
     source
   });
 };
