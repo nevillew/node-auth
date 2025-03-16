@@ -1,8 +1,9 @@
 import { Sequelize } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, fromPromise, ErrorCode } from '../utils/errors';
 import { TenantAttributes } from '../types';
 import logger from '../config/logger';
+import { withTransaction } from '../utils/transactions';
 
 // We'll need to convert the database manager to TypeScript later
 // For now, we'll import it as a require

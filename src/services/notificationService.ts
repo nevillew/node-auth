@@ -1,6 +1,6 @@
 import { User, Notification } from '../models';
 import * as emailService from './emailService';
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, fromPromise, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
 
 // Types for notification service

@@ -94,7 +94,7 @@ const handleLocalLogin = async (req: Request, res: Response, next: NextFunction)
         // Increment failed attempts
         if (user) {
           const failedAttempts = user.failedLoginAttempts + 1;
-          const updates = {
+          const updates: any = {
             failedLoginAttempts: failedAttempts,
             lastFailedLoginAt: new Date()
           };

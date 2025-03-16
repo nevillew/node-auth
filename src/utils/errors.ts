@@ -328,6 +328,42 @@ export const mapResult = <T, U>(result: Result<T>, fn: (value: T) => U): Result<
   result.ok ? success(fn(result.value)) : result;
 
 /**
+ * Transforms an array of Results into a Result of array
+ * 
+ * This utility either returns a success containing all the successful values,
+ * or the first failure encountered.
+ * 
+ * @template T The type of successful values
+ * @param {Result<T>[]} results - Array of Result objects
+ * @returns {Result<T[]>} Result containing array of values or first error
+ * 
+ * @example
+ * // Process multiple items and collect results
+ * const itemResults = await Promise.all(
+ *   items.map(item => processItem(item))
+ * );
+ * 
+ * // Convert array of Results to Result of array
+ * const result = sequenceResults(itemResults);
+ */
+export const sequenceResults = <T>(results: Result<T>[]): Result<T[]> => {
+  // Use functional approach with find and map
+  // Find the first failure, if any
+  const firstFailure = results.find(result => !result.ok);
+  
+  // Return early if there's a failure
+  if (firstFailure && !firstFailure.ok) {
+    return firstFailure;
+  }
+  
+  // Use type assertion to safely extract values
+  // This is safe because we've already checked that all results are successful
+  const values = results.map(result => (result as SuccessResult<T>).value);
+  
+  return success(values);
+};
+
+/**
  * Chains multiple result-producing operations together, short-circuiting on first error.
  * This implements the "monadic bind" or "flatMap" operation from functional programming,
  * allowing composition of operations that might fail.
