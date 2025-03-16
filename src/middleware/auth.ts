@@ -197,30 +197,28 @@ const verifyScopes = async (
 const checkTokenRevocation = async (
   token: OAuth2Server.Token
 ): Promise<Result<void>> => {
-  try {
-    const tokenRecord = await OAuthToken.findOne({
+  return fromPromise(
+    OAuthToken.findOne({
       where: { accessToken: token.accessToken },
       include: [{
         model: Role,
         through: { attributes: [] }
       }]
-    });
-
+    }),
+    'auth.checkTokenRevocation'
+  ).then(tokenResult => {
+    if (!tokenResult.ok) return tokenResult;
+    
+    const tokenRecord = tokenResult.value;
+    
     if (tokenRecord?.revoked) {
       return failure(createAppError('INVALID_TOKEN', 401, {
         message: 'Token has been revoked'
       }));
     }
-
+    
     return success(undefined);
-  } catch (err) {
-    logger.error('Token revocation check failed:', err);
-    return failure({
-      message: 'Token verification failed',
-      statusCode: 500,
-      originalError: err instanceof Error ? err : new Error('Token check failed'),
-    });
-  }
+  });
 };
 
 // Handle concurrent session limits (async with Result pattern)

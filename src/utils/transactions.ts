@@ -239,40 +239,26 @@ export const withTransactionChain = async <T, I = any>(
   options: TransactionOptions = {}
 ): Promise<Result<T>> => {
   return withTransaction(async (t) => {
-    // Define a pure recursive function for executing operations
-    const executeOperation = async <R>(
-      operation: (data: any, transaction: Transaction) => Promise<Result<R>>,
-      data: any
-    ): Promise<Result<R>> => {
-      return operation(data, t);
-    };
+    // Create a function that applies a transaction to an operation
+    const withTx = <A, B>(
+      op: (data: A, tx: Transaction) => Promise<Result<B>>
+    ) => (data: A): Promise<Result<B>> => op(data, t);
     
-    // Define a pure recursive function for chaining operations
-    const chainOperations = async <R>(
-      remainingOps: ReadonlyArray<(data: any, transaction: Transaction) => Promise<Result<any>>>,
-      currentData: any
-    ): Promise<Result<R>> => {
-      // Base case: no more operations
-      if (remainingOps.length === 0) {
-        return success(currentData) as Result<R>;
-      }
-      
-      // Get the next operation
-      const [nextOp, ...restOps] = remainingOps;
-      
-      // Execute the operation
-      const result = await executeOperation(nextOp, currentData);
-      
-      // If operation failed, return the error
-      if (!result.ok) {
-        return result as Result<R>;
-      }
-      
-      // Continue with the next operation
-      return chainOperations<R>(restOps, result.value);
-    };
-    
-    // Start the chain with the initial data
-    return chainOperations<T>(operations, initialData);
+    // Use reduce to chain operations in a functional way
+    // This is a more declarative approach than recursion
+    return operations.reduce(
+      async (previousPromise: Promise<Result<any>>, operation) => {
+        const previousResult = await previousPromise;
+        
+        // Short-circuit on failure
+        if (!previousResult.ok) {
+          return previousResult;
+        }
+        
+        // Apply the operation with transaction context
+        return withTx(operation)(previousResult.value);
+      },
+      Promise.resolve(success(initialData))
+    ) as Promise<Result<T>>;
   }, externalTransaction, options);
 };

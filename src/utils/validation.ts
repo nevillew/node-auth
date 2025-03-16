@@ -266,13 +266,14 @@ export const sanitizeObject = <T extends Record<string, unknown>>(
   parentKey: string = 'root'
 ): Result<T> => {
   try {
-    // Use functional approach with Object.entries and reduce
-    const sanitizeEntry = ([key, value]: [string, unknown]): Result<[string, unknown]> => {
+    // Use functional approach with Object.entries and map/reduce
+    // First map each entry to a Result of sanitized entry
+    const sanitizeEntry = ([key, value]: readonly [string, unknown]): Result<readonly [string, unknown]> => {
       const fullKey = parentKey === 'root' ? key : `${parentKey}.${key}`;
       const sanitizeResult = sanitizeValue(value, fullKey);
       
       return sanitizeResult.ok 
-        ? success([key, sanitizeResult.value])
+        ? success([key, sanitizeResult.value] as const)
         : failure({
             message: `Failed to sanitize property '${fullKey}'`,
             statusCode: 400,
@@ -281,21 +282,14 @@ export const sanitizeObject = <T extends Record<string, unknown>>(
           });
     };
     
-    // Map entries to Results of sanitized entries
-    const entriesResults = Object.entries(obj).map(sanitizeEntry);
+    // Use sequenceResults to transform array of Results to Result of array
+    const entriesResultsArray = Object.entries(obj).map(sanitizeEntry);
+    const entriesResult = sequenceResults(entriesResultsArray);
     
-    // Find first failure if any
-    const firstFailure = entriesResults.find(result => !result.ok);
-    if (firstFailure && !firstFailure.ok) {
-      return firstFailure as Result<any>;
-    }
-    
-    // Combine all sanitized entries into a new object
-    const sanitizedEntries = entriesResults.map(result => 
-      (result as SuccessResult<[string, unknown]>).value
+    // Transform the Result of entries array to Result of object
+    return mapResult(entriesResult, entries => 
+      Object.fromEntries(entries) as T
     );
-    
-    return success(Object.fromEntries(sanitizedEntries) as T);
   } catch (err) {
     return failure({
       message: 'Error sanitizing object',

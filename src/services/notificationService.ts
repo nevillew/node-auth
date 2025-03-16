@@ -30,32 +30,34 @@ export interface EmailParams {
 export const sendEmailNotification = async (
   params: EmailNotificationParams
 ): Promise<Result<boolean>> => {
-  try {
-    const { userId, subject, message } = params;
+  const { userId, subject, message } = params;
+  
+  // Use fromPromise for better error handling
+  return fromPromise(
+    User.findByPk(userId),
+    'notificationService.sendEmailNotification'
+  ).then(userResult => {
+    if (!userResult.ok) return userResult;
     
-    const user = await User.findByPk(userId);
+    const user = userResult.value;
     if (!user) {
       return failure({
         message: 'User not found',
-        statusCode: 404
+        statusCode: 404,
+        code: ErrorCode.RESOURCE_NOT_FOUND
       });
     }
-
-    await emailService.sendEmail({
-      to: user.email,
-      subject,
-      html: message
-    });
-
-    return success(true);
-  } catch (err) {
-    logger.error('Failed to send email notification', { error: err });
-    return failure({
-      message: 'Failed to send email notification',
-      statusCode: 500,
-      originalError: err instanceof Error ? err : new Error('Unknown error')
-    });
-  }
+    
+    // Chain the email sending operation
+    return fromPromise(
+      emailService.sendEmail({
+        to: user.email,
+        subject,
+        html: message
+      }),
+      'notificationService.sendEmailNotification'
+    ).then(() => success(true));
+  });
 };
 
 /**
@@ -65,23 +67,25 @@ export const sendSystemNotification = async (
   userId: string,
   message: string
 ): Promise<Result<boolean>> => {
-  try {
-    await Notification.create({
+  // Use fromPromise for better error handling
+  return fromPromise(
+    Notification.create({
       userId,
       message,
       read: false,
       createdAt: new Date()
-    });
-
-    return success(true);
-  } catch (err) {
+    }),
+    'notificationService.sendSystemNotification'
+  ).then(() => success(true))
+  .catch(err => {
     logger.error('Failed to send system notification', { error: err });
     return failure({
       message: 'Failed to send system notification',
       statusCode: 500,
+      code: ErrorCode.DATABASE_ERROR,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
-  }
+  });
 };
 
 /**
