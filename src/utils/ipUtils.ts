@@ -30,7 +30,8 @@ export const isValidIP = (ip: string): boolean => {
     }
     
     return true;
-  } catch (error) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return false;
   }
 };
@@ -58,7 +59,8 @@ export const isValidCIDR = (range: string): boolean => {
     // Validate network address
     const [network] = ipaddr.parseCIDR(range);
     return network.toString() === ip;
-  } catch (error) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return false;
   }
 };
@@ -71,7 +73,8 @@ export const isIPInRange = (ip: string, range: string): boolean => {
     const addr = ipaddr.parse(ip);
     const [rangeAddr, bits] = ipaddr.parseCIDR(range);
     return addr.match(rangeAddr, bits);
-  } catch (error) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (_error) {
     return false;
   }
 };

@@ -10,7 +10,9 @@
  * - Function composition: Combining associate functions
  */
 
-import { Sequelize, ModelAttributes, ModelOptions, Model } from 'sequelize';
+import SequelizeOriginal from 'sequelize';
+const { Sequelize } = SequelizeOriginal as any;
+import { ModelAttributes, ModelOptions, Model } from 'sequelize';
 import { AssociableModel, ModelRegistry } from '../types';
 
 /**
@@ -101,8 +103,12 @@ export const createModelDefiner = <T, C = T>({
  * 
  * @example
  * // Define multiple association functions
- * const userTenantAssociations = (models) => { /* associations */ };
- * const userRoleAssociations = (models) => { /* associations */ };
+ * const userTenantAssociations = (models) => { 
+ *   // association code here
+ * };
+ * const userRoleAssociations = (models) => { 
+ *   // association code here
+ * };
  * 
  * // Combine them
  * const userAssociations = combineAssociations([

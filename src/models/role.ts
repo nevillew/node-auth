@@ -1,4 +1,6 @@
-import { DataTypes, Sequelize, Optional } from 'sequelize';
+import SequelizeOriginal from 'sequelize';
+const { Sequelize } = SequelizeOriginal as any;
+import { DataTypes, Optional } from 'sequelize';
 import { RoleAttributes, ModelRegistry, AssociableModel } from '../types';
 import { createModelDefiner } from '../utils/modelFactory';
 

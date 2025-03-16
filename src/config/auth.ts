@@ -5,7 +5,7 @@ import RedisStore from 'rate-limit-redis';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as LocalStrategy } from 'passport-local';
 import bcrypt from 'bcrypt';
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import { manager } from './database';
 import { User, OAuthClient, OAuthToken, SecurityAuditLog } from '../models';
 
@@ -58,7 +58,7 @@ const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 login attempts per window
   message: 'Too many login attempts, please try again later',
-  handler: async (req: Request, res: Response, next: NextFunction) => {
+  handler: async (req: Request, res: Response) => {
     const { email } = req.body;
     if (email) {
       const user = await User.findOne({ where: { email } });
@@ -247,6 +247,18 @@ const oauth2Model = {
       where: { refreshToken: token.refreshToken }
     });
     return true;
+  },
+  
+  // Required for Scope verification
+  verifyScope: async (token: any, scope: string): Promise<boolean> => {
+    // If the token doesn't have scopes, it can't access any scoped resource
+    if (!token.scopes || !token.scopes.length) {
+      return false;
+    }
+    
+    // Check if the token has all the requested scopes
+    const requestedScopes = scope.split(' ');
+    return requestedScopes.every(s => token.scopes.includes(s));
   }
 };
 
@@ -329,7 +341,8 @@ passport.use(new GoogleStrategy({
         });
       }
 
-      return done(null, user);
+      // Convert to User type expected by Passport
+      return done(null, user ? user as any : false);
     } catch (err) {
       return done(err);
     }

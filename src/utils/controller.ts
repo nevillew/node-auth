@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { Op } from 'sequelize';
-import { AuthenticatedRequest, ControllerFunction } from '../types';
+import { Response, NextFunction } from 'express';
+import { ParsedQs } from 'qs';
+import { AuthenticatedRequest, ControllerFunction, QueryOptions } from '../types';
 import { Result } from './errors';
 import logger from '../config/logger';
 
@@ -18,196 +18,72 @@ import logger from '../config/logger';
  */
 
 /**
- * Interface for pagination parameters
+ * Interface for pagination options
  * @interface
  */
-export interface PaginationParams {
+export interface PaginationOptions {
   page: number;
-  limit: number;
-  offset: number;
+  perPage: number;
 }
 
 /**
- * Interface for sort parameters
- * @interface
- */
-export interface SortParams {
-  sortBy: string;
-  sortOrder: 'ASC' | 'DESC';
-}
-
-/**
- * Gets pagination parameters from request query.
- * This is a pure function that transforms query parameters
- * into a structured object for database pagination.
+ * Safely converts ParsedQs objects to typed parameters
+ * This is a utility function to handle query parameters in a type-safe way
  * 
- * @param {any} query - The request query object
- * @returns {PaginationParams} Normalized pagination parameters
- * 
- * @example
- * // For query: ?page=2&limit=10
- * // Returns: { page: 2, limit: 10, offset: 10 }
- * const pagination = getPaginationParams(req.query);
+ * @param {ParsedQs} query - Express query object
+ * @returns {Record<string, string | string[] | undefined>} Sanitized query parameters
  */
-export const getPaginationParams = (query: any): PaginationParams => {
-  const page = parseInt(query.page as string) || 1;
-  const limit = parseInt(query.limit as string) || 20;
-  const offset = (page - 1) * limit;
+export const sanitizeQueryParams = (query: ParsedQs): Record<string, string | string[] | undefined> => {
+  const result: Record<string, string | string[] | undefined> = {};
   
-  return { page, limit, offset };
+  Object.entries(query).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      result[key] = value;
+    } else if (Array.isArray(value)) {
+      result[key] = value.map(v => String(v));
+    } else if (value !== null && typeof value === 'object') {
+      // Handle nested ParsedQs objects by converting them to strings
+      result[key] = String(value);
+    }
+  });
+  
+  return result;
 };
 
 /**
- * Gets sort parameters from request query.
- * This is a pure function that transforms query parameters
- * into a structured object for database sorting.
+ * Get pagination parameters from query in a type-safe way
  * 
- * @param {any} query - The request query object
- * @param {string} defaultSort - Default field to sort by
- * @param {'ASC' | 'DESC'} defaultOrder - Default sort direction
- * @returns {SortParams} Normalized sort parameters
- * 
- * @example
- * // For query: ?sortBy=name&sortOrder=ASC
- * // Returns: { sortBy: 'name', sortOrder: 'ASC' }
- * const sorting = getSortParams(req.query, 'createdAt', 'DESC');
+ * @param {ParsedQs} query - Express query parameters
+ * @returns {PaginationOptions} Pagination options
  */
-export const getSortParams = (
-  query: any,
-  defaultSort = 'createdAt',
-  defaultOrder: 'ASC' | 'DESC' = 'DESC'
-): SortParams => {
-  const sortBy = query.sortBy as string || defaultSort;
-  const sortOrder = (query.sortOrder as 'ASC' | 'DESC') || defaultOrder;
-  
-  return { sortBy, sortOrder };
-};
-
-/**
- * Builds a database condition for searching across multiple fields.
- * This demonstrates composition by creating complex query conditions
- * from simpler components.
- * 
- * @param {string | undefined} search - The search query
- * @param {string[]} fields - Fields to search in
- * @returns {any} A Sequelize condition object or null
- * 
- * @example
- * // Returns: { [Op.or]: [
- * //   { name: { [Op.iLike]: '%john%' } },
- * //   { email: { [Op.iLike]: '%john%' } }
- * // ]}
- * const searchCondition = buildSearchCondition('john', ['name', 'email']);
- */
-export const buildSearchCondition = (
-  search: string | undefined,
-  fields: string[]
-): Record<string, any> | null => {
-  if (!search) return null;
-  
-  // Create a sanitized search term
-  const sanitizedSearch = search.trim();
-  if (!sanitizedSearch) return null;
-  
-  // Map each field to a condition in a pure way
-  const fieldConditions = fields.map(field => ({
-    [field]: { [Op.iLike]: `%${sanitizedSearch}%` }
-  }));
-  
+export const getPaginationParams = (query: ParsedQs): PaginationOptions => {
+  const sanitized = sanitizeQueryParams(query);
   return {
-    [Op.or]: fieldConditions
+    page: sanitized.page ? parseInt(sanitized.page as string, 10) : 1,
+    perPage: sanitized.perPage ? parseInt(sanitized.perPage as string, 10) : 20
   };
 };
 
 /**
- * Builds a date range condition for database queries.
- * This is a pure function that transforms date strings into
- * a structured query condition.
+ * Get sorting parameters from query in a type-safe way
  * 
- * @param {string | undefined} startDate - Start date in ISO format
- * @param {string | undefined} endDate - End date in ISO format
- * @param {string} field - Database field to apply condition to
- * @returns {any} A Sequelize condition object or null
- * 
- * @example
- * // Returns: { createdAt: { [Op.gte]: 2023-01-01, [Op.lte]: 2023-12-31 } }
- * const dateCondition = buildDateRangeCondition('2023-01-01', '2023-12-31');
+ * @param {ParsedQs} query - Express query parameters
+ * @param {string} defaultField - Default field to sort by
+ * @param {string} defaultOrder - Default sort order
+ * @returns {SortOptions} Sorting options
  */
-export const buildDateRangeCondition = (
-  startDate: string | undefined,
-  endDate: string | undefined,
-  field = 'createdAt'
-): any => {
-  if (!startDate && !endDate) return null;
-  
-  const condition: any = {};
-  if (startDate) condition[Op.gte] = new Date(startDate);
-  if (endDate) condition[Op.lte] = new Date(endDate);
-  
-  return { [field]: condition };
+export const getSortParams = (
+  query: ParsedQs, 
+  defaultField = 'createdAt', 
+  defaultOrder: 'ASC' | 'DESC' = 'DESC'
+): { sortBy: string; sortOrder: 'ASC' | 'DESC' } => {
+  const sanitized = sanitizeQueryParams(query);
+  return {
+    sortBy: sanitized.sortBy as string || defaultField,
+    sortOrder: (sanitized.sortOrder as 'ASC' | 'DESC') || defaultOrder
+  };
 };
 
-/**
- * Combines multiple conditions with AND logic.
- * This is a variadic function that takes any number of conditions
- * and combines them into a single condition.
- * 
- * @param {...any[]} conditions - Conditions to combine
- * @returns {Record<string, any>} Combined condition object
- * 
- * @example
- * // Returns: { [Op.and]: [condition1, condition2] }
- * const whereClause = combineConditions(condition1, condition2);
- */
-export const combineConditions = (...conditions: any[]): Record<string, any> => {
-  // Use functional approach with filter and reduce
-  const validConditions = conditions.filter(Boolean);
-  
-  // Handle edge cases functionally
-  return validConditions.length === 0 
-    ? {} 
-    : validConditions.length === 1 
-      ? validConditions[0] 
-      : { [Op.and]: validConditions };
-};
-
-/**
- * Formats a paginated response with consistent structure.
- * This is a pure function that transforms raw database results
- * into a standardized paginated response format.
- * 
- * @template T The type of data items
- * @param {T[]} data - The page of data items
- * @param {number} count - Total count of items
- * @param {number} page - Current page number
- * @param {number} limit - Items per page
- * @returns {Object} Formatted pagination response
- * 
- * @example
- * // Returns: { 
- * //   data: [item1, item2], 
- * //   total: 50, 
- * //   page: 1, 
- * //   totalPages: 25 
- * // }
- * const response = formatPaginatedResponse(items, count, page, limit);
- */
-export const formatPaginatedResponse = <T>(
-  data: T[],
-  count: number,
-  page: number,
-  limit: number
-): {
-  data: T[];
-  total: number;
-  page: number;
-  totalPages: number;
-} => ({
-  data,
-  total: count,
-  page,
-  totalPages: Math.ceil(count / limit)
-});
 
 /**
  * Handles API errors in a consistent way.
@@ -217,7 +93,7 @@ export const formatPaginatedResponse = <T>(
  * @param {any} error - Error to handle
  * @returns {void}
  */
-export const handleApiError = (res: Response, error: any): void => {
+export const handleApiError = (res: Response, error: Error & { statusCode?: number; details?: unknown }): void => {
   logger.error('API error:', { error });
   
   const statusCode = error.statusCode || 500;
@@ -272,7 +148,7 @@ export const handleServiceResult = <T>(
   result: Result<T>,
   res: Response,
   successStatus = 200,
-  successTransform?: (data: T) => any
+  successTransform?: (data: T) => unknown
 ): void => {
   if (result.ok) {
     const responseData = successTransform ? successTransform(result.value) : result.value;
@@ -303,7 +179,7 @@ export const createController = <T extends Record<string, ControllerFunction>>(
   const wrappedHandlers = {} as T;
   
   for (const [key, handler] of Object.entries(handlers)) {
-    wrappedHandlers[key as keyof T] = withErrorHandling(handler) as any;
+    wrappedHandlers[key as keyof T] = withErrorHandling(handler) as T[keyof T];
   }
   
   return wrappedHandlers;

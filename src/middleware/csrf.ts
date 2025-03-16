@@ -5,7 +5,6 @@ import { createAppError } from './errorHandler';
 import logger from '../config/logger';
 import { SecurityAuditLog } from '../models';
 import crypto, { timingSafeEqual, randomBytes } from 'crypto';
-// Note: s3 is not used in this file, so no import is needed
 
 /**
  * Pure function to create CSRF middleware configuration

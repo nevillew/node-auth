@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize, Optional } from 'sequelize';
+import SequelizeOriginal from 'sequelize';
+const { Sequelize } = SequelizeOriginal as any;
+import { DataTypes, Model, Optional } from 'sequelize';
 import { LoginHistoryAttributes, LoginStatus, GeoLocation, ModelRegistry } from '../types';
 
 /**

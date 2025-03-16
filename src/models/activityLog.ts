@@ -1,4 +1,6 @@
-import { DataTypes, Model, Sequelize, Optional } from 'sequelize';
+import SequelizeOriginal from 'sequelize';
+const { Sequelize } = SequelizeOriginal as any;
+import { DataTypes, Model, Optional } from 'sequelize';
 import { ActivityLogAttributes } from '../types';
 
 /**
@@ -72,7 +74,7 @@ export const defineActivityLogModel = (sequelize: Sequelize): Model<ActivityLogA
   };
 
   // Add association method to model
-  (ActivityLogModel as any).associate = associateActivityLog;
+  (ActivityLogModel as Model<ActivityLogAttributes, ActivityLogCreationAttributes> & { associate: typeof associateActivityLog }).associate = associateActivityLog;
 
   return ActivityLogModel;
 };

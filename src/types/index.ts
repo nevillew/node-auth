@@ -1,12 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
-import { Sequelize, Model } from 'sequelize';
+// Import types from our custom declaration file
+import type { Sequelize, Model } from './sequelize';
 
 // Extend Express Request
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Omit<Request, 'route'> {
   user?: UserAttributes;
   impersonator?: UserAttributes;
   route?: {
     scopes: string[];
+  };
+  tenant?: {
+    id: string;
+    name: string;
   };
 }
 
@@ -472,6 +477,36 @@ export interface NotificationAttributes {
   updatedAt: Date;
 }
 
+// OAuth related types
+export interface OAuthClientAttributes {
+  id: string;
+  clientId: string;
+  clientSecret: string;
+  name: string;
+  description?: string;
+  redirectUris: string[];
+  allowedScopes: string[];
+  grants: string[];
+  tenantId: string;
+  createdById: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface OAuthTokenAttributes {
+  id: string;
+  accessToken: string;
+  accessTokenExpiresAt: Date;
+  refreshToken?: string;
+  refreshTokenExpiresAt?: Date;
+  clientId: string;
+  userId: string;
+  scopes: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export enum ModelName {
   USER = 'User',
   TENANT = 'Tenant',
@@ -509,7 +544,7 @@ export interface DatabaseContext {
   RolePermission: AssociableModel<RolePermissionAttributes>;
   Invitation: AssociableModel<InvitationAttributes>;
   // Index signature for dynamic access
-  [key: string]: Sequelize | AssociableModel<any, any>;
+  [key: string]: Sequelize | AssociableModel<unknown, unknown>;
 }
 
 /**
@@ -531,6 +566,8 @@ export interface AppErrorOptions {
   originalError?: Error;
   /** Where the error originated */
   source?: string;
+  /** Whether this is an operational error */
+  isOperational?: boolean;
 }
 
 // Validation types (for zod)
@@ -556,7 +593,7 @@ export interface ValidationResult {
  * @template T The model's attributes type
  * @template C The model's creation attributes type (defaults to T)
  */
-export interface AssociableModel<T, C = T> extends Model<T, C> {
+export interface AssociableModel<T, C = T> extends Model {
   /**
    * Define model associations with other models
    * 
@@ -572,7 +609,7 @@ export interface AssociableModel<T, C = T> extends Model<T, C> {
    * @param {object} options - Query options
    * @returns {Promise<AssociableModel<T, C> | null>} The found record or null
    */
-  findByPk(id: string | number, options?: any): Promise<AssociableModel<T, C> | null>;
+  findByPk(id: string | number, options?: Record<string, unknown>): Promise<AssociableModel<T, C> | null>;
   
   /**
    * Find a single record with proper typing
@@ -580,7 +617,7 @@ export interface AssociableModel<T, C = T> extends Model<T, C> {
    * @param {object} options - Query options
    * @returns {Promise<AssociableModel<T, C> | null>} The found record or null
    */
-  findOne(options?: any): Promise<AssociableModel<T, C> | null>;
+  findOne(options?: Record<string, unknown>): Promise<AssociableModel<T, C> | null>;
   
   /**
    * Create a new record with proper typing
@@ -589,7 +626,103 @@ export interface AssociableModel<T, C = T> extends Model<T, C> {
    * @param {object} options - Creation options
    * @returns {Promise<AssociableModel<T, C>>} The created record
    */
-  create(values: C, options?: any): Promise<AssociableModel<T, C>>;
+  create(values: C, options?: Record<string, unknown>): Promise<AssociableModel<T, C>>;
+  
+  /**
+   * Find all records matching criteria
+   * 
+   * @param {object} options - Query options
+   * @returns {Promise<AssociableModel<T, C>[]>} Array of matching records
+   */
+  findAll(options?: Record<string, unknown>): Promise<AssociableModel<T, C>[]>;
+  
+  /**
+   * Find and count records
+   * 
+   * @param {object} options - Query options
+   * @returns {Promise<{ rows: AssociableModel<T, C>[]; count: number }>} Count and rows
+   */
+  findAndCountAll(options?: Record<string, unknown>): Promise<{ rows: AssociableModel<T, C>[]; count: number }>;
+  
+  /**
+   * Update an existing record
+   * 
+   * @param {Partial<T>} values - Values to update
+   * @param {object} options - Update options
+   * @returns {Promise<[number, AssociableModel<T, C>[]]>} Number of affected rows and affected records
+   */
+  update(values: Partial<T>, options?: Record<string, unknown>): Promise<[number, AssociableModel<T, C>[]]>;
+  
+  /**
+   * Delete records
+   * 
+   * @param {object} options - Destroy options
+   * @returns {Promise<number>} Number of deleted records
+   */
+  destroy(options?: Record<string, unknown>): Promise<number>;
+  
+  /**
+   * Convert model instance to plain object
+   * 
+   * @returns {T} Plain object representation
+   */
+  toJSON(): T;
+  
+  /**
+   * Get related models through an association
+   * 
+   * @param {string} associationName - Name of the association
+   * @returns {Promise<any[]>} Related models
+   */
+  get<K extends keyof T>(key: K): T[K];
+  
+  /**
+   * Access to all model attributes as defined in T
+   */
+  [key: string]: any;
+}
+
+// Extended model interfaces with association accessors
+export interface UserModel extends AssociableModel<UserAttributes> {
+  getRoles(): Promise<RoleModel[]>;
+  getTenants(): Promise<TenantModel[]>;
+  getAuthenticators(): Promise<AssociableModel<AuthenticatorAttributes>[]>;
+  getActivityLogs(): Promise<AssociableModel<ActivityLogAttributes>[]>;
+  getLoginHistory(): Promise<AssociableModel<LoginHistoryAttributes>[]>;
+  Roles?: RoleModel[];
+  Tenants?: TenantModel[];
+  Authenticators?: AssociableModel<AuthenticatorAttributes>[];
+}
+
+export interface TenantModel extends AssociableModel<TenantAttributes> {
+  getUsers(): Promise<UserModel[]>;
+  getRoles(): Promise<RoleModel[]>;
+  Users?: UserModel[];
+  Roles?: RoleModel[];
+}
+
+export interface RoleModel extends AssociableModel<RoleAttributes> {
+  getUsers(): Promise<UserModel[]>;
+  getPermissions(): Promise<PermissionModel[]>;
+  Users?: UserModel[];
+  Permissions?: PermissionModel[];
+}
+
+export interface PermissionModel extends AssociableModel<PermissionAttributes> {
+  getRoles(): Promise<RoleModel[]>;
+  Roles?: RoleModel[];
+}
+
+export interface OAuthClientModel extends AssociableModel<OAuthClientAttributes> {
+  getTokens(): Promise<OAuthTokenModel[]>;
+  Tokens?: OAuthTokenModel[];
+}
+
+export interface OAuthTokenModel extends AssociableModel<OAuthTokenAttributes> {
+  getClient(): Promise<OAuthClientModel>;
+  getUser(): Promise<UserModel>;
+  client?: OAuthClientModel;
+  user?: UserModel;
 }
 
 /**
@@ -598,11 +731,11 @@ export interface AssociableModel<T, C = T> extends Model<T, C> {
  * for use in defining relationships between models
  */
 export interface ModelRegistry {
-  [ModelName.USER]: AssociableModel<UserAttributes>;
-  [ModelName.TENANT]: AssociableModel<TenantAttributes>;
+  [ModelName.USER]: UserModel;
+  [ModelName.TENANT]: TenantModel;
   [ModelName.TENANT_USER]: AssociableModel<TenantUserAttributes>;
-  [ModelName.ROLE]: AssociableModel<RoleAttributes>;
-  [ModelName.PERMISSION]: AssociableModel<PermissionAttributes>;
+  [ModelName.ROLE]: RoleModel;
+  [ModelName.PERMISSION]: PermissionModel;
   [ModelName.ACTIVITY_LOG]: AssociableModel<ActivityLogAttributes>;
   [ModelName.LOGIN_HISTORY]: AssociableModel<LoginHistoryAttributes>;
   [ModelName.SECURITY_AUDIT_LOG]: AssociableModel<SecurityAuditLogAttributes>;
@@ -611,4 +744,31 @@ export interface ModelRegistry {
   [ModelName.USER_ROLE]: AssociableModel<UserRoleAttributes>;
   [ModelName.ROLE_PERMISSION]: AssociableModel<RolePermissionAttributes>;
   [ModelName.INVITATION]: AssociableModel<InvitationAttributes>;
+}
+
+/**
+ * Common options for database operations
+ * This type provides a consistent structure for database query options
+ */
+export interface QueryOptions {
+  transaction?: unknown;
+  where?: Record<string, unknown>;
+  include?: unknown[];
+  order?: [string, string][];
+  limit?: number;
+  offset?: number;
+  attributes?: string[];
+  group?: string[];
+  raw?: boolean;
+  nest?: boolean;
+  paranoid?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Type for database query conditions
+ * This provides a more specific type than Record<string, unknown>
+ */
+export interface QueryCondition {
+  [key: string]: string | number | boolean | Date | RegExp | QueryCondition | Array<string | number | boolean | Date | RegExp | QueryCondition>;
 }

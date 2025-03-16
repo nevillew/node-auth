@@ -2,6 +2,7 @@ import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
 import * as fallbackCache from './fallbackCache';
 import { createRedisClient, releaseRedisClient } from '../config/redis';
+import { OAuthToken, User, OAuthClient } from '../models';
 
 // Create a properly typed Redis client
 const getRedisClient = async () => {
@@ -19,6 +20,9 @@ const getOrCreateRedisClient = async (): Promise<Awaited<ReturnType<typeof creat
   return redisClient;
 };
 
+// Use this function since getRedisClient isn't used directly
+const getClient = getOrCreateRedisClient;
+
 // Types for the service
 interface TokenIntrospection {
   active: boolean;
@@ -32,10 +36,6 @@ interface TokenIntrospection {
   exp?: number;
   iat?: number;
 }
-
-// Models (will need proper types later)
-// For now, use require for models
-const { OAuthToken, User, OAuthClient } = require('../models');
 
 // Cache TTL (1 hour)
 const CACHE_TTL = 3600;

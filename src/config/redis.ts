@@ -1,5 +1,5 @@
 import IORedis from 'ioredis';
-import { promisify } from 'util';
+// import { promisify } from 'util';
 import logger from './logger';
 import * as fallbackCache from '../services/fallbackCache';
 
@@ -32,10 +32,29 @@ export const CACHE_PREFIX = {
   SETTINGS: 'settings:'
 };
 
+// Extended Redis client interface with custom methods
 interface RedisClient extends IORedis.Redis {
   optimizeMemory(): Promise<void>;
-  memory(command: string): Promise<any>;
+  memory(command: string, ...args: string[]): Promise<any>;
   replica?: IORedis.Redis;
+  config(...args: string[]): Promise<any>;
+  info(...args: string[]): Promise<string>;
+  
+  // Event handlers
+  on(event: 'error', listener: (err: Error) => void): this;
+  on(event: 'ready', listener: () => void): this;
+  on(event: 'connect', listener: () => void): this;
+  on(event: 'close', listener: () => void): this;
+  on(event: 'reconnecting', listener: () => void): this;
+  on(event: string, listener: (...args: any[]) => void): this;
+  
+  // Redis commands
+  select(db: number): Promise<'OK'>;
+  quit(callback?: (err: Error | null, result: string) => void): Promise<'OK'>;
+  del(...keys: string[]): Promise<number>;
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ...args: any[]): Promise<'OK' | null>;
+  incr(key: string): Promise<number>;
 }
 
 const redisPool: RedisClient[] = [];
@@ -48,6 +67,7 @@ const POOL_ACQUIRE_TIMEOUT = 30000;
 
 // Initialize Redis client with additional methods
 const initializeRedisClient = async (): Promise<RedisClient> => {
+  // Create a basic Redis client
   const client = new IORedis(redisOptions) as RedisClient;
   
   // Add custom methods
@@ -56,7 +76,8 @@ const initializeRedisClient = async (): Promise<RedisClient> => {
     await this.config('SET', 'maxmemory-policy', 'allkeys-lru');
   };
   
-  client.memory = async function(command: string): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  client.memory = async function(_command: string): Promise<any> {
     try {
       const info = await this.info('memory');
       const lines = info.split('\r\n');
@@ -78,8 +99,8 @@ const initializeRedisClient = async (): Promise<RedisClient> => {
       }
       
       return stats;
-    } catch (error) {
-      logger.error('Failed to get Redis memory stats:', error);
+    } catch (_error) {
+      logger.error('Failed to get Redis memory stats:', _error);
       return { used_memory: 0, maxmemory: 0 };
     }
   };
@@ -104,8 +125,8 @@ export const createRedisClient = async (): Promise<RedisClient> => {
     try {
       const client = await initializeRedisClient();
       redisPool.push(client);
-    } catch (error) {
-      logger.error('Failed to initialize Redis client for pool:', error);
+    } catch (_error) {
+      logger.error('Failed to initialize Redis client for pool:', _error);
       break;
     }
   }
@@ -132,10 +153,10 @@ export const createRedisClient = async (): Promise<RedisClient> => {
 
   try {
     return await Promise.race([clientPromise, timeoutPromise]);
-  } catch (error) {
-    logger.error('Failed to acquire Redis client from pool:', error);
+  } catch (_error) {
+    logger.error('Failed to acquire Redis client from pool:', _error);
     redisIsDown = true;
-    throw error;
+    throw _error;
   }
 };
 
@@ -146,7 +167,8 @@ export const releaseRedisClient = (client: RedisClient): void => {
     try {
       client.select(0);
       redisPool.push(client);
-    } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       client.quit().catch(err => logger.error('Error quitting Redis client:', err));
     }
   } else {

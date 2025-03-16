@@ -91,25 +91,7 @@ const handleLocalLogin = async (req: Request, res: Response, next: NextFunction)
       if (err) return next(err);
       
       if (!user) {
-        return res.status(401).json(info);
-      }
-      
-      // If we get here, user exists
-      if (user) {
-        const failedAttempts = user.failedLoginAttempts + 1;
-        const updates: any = {
-          failedLoginAttempts: failedAttempts,
-          lastFailedLoginAt: new Date()
-        };
-
-          // Lock account after 5 failed attempts
-          if (failedAttempts >= 5) {
-            updates.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
-          }
-
-          await user.update(updates);
-        }
-        
+        // Handle case where user is not found
         return res.status(401).json(info);
       }
       

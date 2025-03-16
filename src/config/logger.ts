@@ -15,9 +15,17 @@ interface ExtendedRequest extends Request {
   };
 }
 
+// Extended Error interface with code property
+interface ExtendedError extends Error {
+  code?: string | number;
+  statusCode?: number;
+  details?: unknown;
+  isOperational?: boolean;
+}
+
 interface LogInfo {
   [key: string]: any;
-  error?: Error;
+  error?: ExtendedError;
   req?: ExtendedRequest;
   environment?: string;
   service?: string;
@@ -25,7 +33,7 @@ interface LogInfo {
 }
 
 // Custom format for structured logging
-const structuredFormat = winston.format((info: LogInfo) => {
+const structuredFormat = winston.format((info: winston.Logform.TransformableInfo & LogInfo) => {
   info.environment = process.env.NODE_ENV;
   info.service = process.env.SERVICE_NAME || 'multi-tenant-api';
   info.version = process.env.npm_package_version;
@@ -59,6 +67,11 @@ const structuredFormat = winston.format((info: LogInfo) => {
 
 // Import metrics (assume it exists in the same directory)
 import * as metrics from './metrics';
+
+// Extended logger interface
+interface ExtendedLogger extends winston.Logger {
+  addRequestContext(req: ExtendedRequest, res: Response, next: NextFunction): void;
+}
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -137,4 +150,7 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
-export default logger;
+// Cast to ExtendedLogger to satisfy TypeScript
+const extendedLogger = logger as ExtendedLogger;
+
+export default extendedLogger;

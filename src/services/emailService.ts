@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import mg from 'nodemailer-mailgun-transport';
 import path from 'path';
 import Email from 'email-templates';
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
 import { emailQueue, bounceQueue } from './emailQueueService';
 

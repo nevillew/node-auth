@@ -1,4 +1,5 @@
-import { Sequelize, Options } from 'sequelize';
+import SequelizeOriginal from 'sequelize';
+const { Sequelize } = SequelizeOriginal as any;
 import { Client } from 'pg';
 import { createRedisClient, releaseRedisClient } from './redis';
 import logger from './logger';
@@ -130,7 +131,10 @@ export class DatabaseManager {
   constructor() {
     this.tenantConnectionPools = new Map<string, Sequelize>();
     this.redisClient = null;
-    this.models = require('../models');
+    // Use dynamic import for models to avoid circular dependencies
+    import('../models').then(models => {
+      this.models = models;
+    });
     this.maxPoolSize = Number(process.env.DB_MAX_POOL_SIZE) || 10;
     this.minPoolSize = Number(process.env.DB_MIN_POOL_SIZE) || 1;
     this.idleTimeout = Number(process.env.DB_IDLE_TIMEOUT) || 10000; // 10 seconds
@@ -200,7 +204,8 @@ export class DatabaseManager {
           await pool.authenticate();
           return pool;
         }
-      } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (_error) {
         // Remove broken pool
         this.tenantConnectionPools.delete(tenantId);
         if (pool) await pool.close();
@@ -229,7 +234,8 @@ export class DatabaseManager {
           try {
             await connection.query('SELECT 1');
             return true;
-          } catch (error) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_error) {
             return false;
           }
         }
@@ -262,15 +268,18 @@ export class DatabaseManager {
   setupPoolMonitoring(sequelize: Sequelize, tenantId: string): void {
     const pool = (sequelize as any).connectionManager.pool;
 
-    pool.on('acquire', (connection: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    pool.on('acquire', (_connection: any) => {
       logger.debug(`Connection acquired for tenant ${tenantId}`);
     });
 
-    pool.on('release', (connection: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    pool.on('release', (_connection: any) => {
       logger.debug(`Connection released for tenant ${tenantId}`);
     });
 
-    pool.on('destroy', (connection: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    pool.on('destroy', (_connection: any) => {
       logger.debug(`Connection destroyed for tenant ${tenantId}`);
     });
 

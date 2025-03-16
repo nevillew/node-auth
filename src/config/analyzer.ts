@@ -1,6 +1,4 @@
-import path from 'path';
-import fs from 'fs/promises';
-import yaml from 'js-yaml';
+// These imports are needed for future expansion of the analyzer config loading
 import { cosmiconfig } from 'cosmiconfig';
 import logger from './logger';
 

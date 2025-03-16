@@ -1,3 +1,20 @@
+export interface UserPreferences {
+  theme: string;
+  notifications: {
+    email: boolean;
+    push: boolean;
+    sms: boolean;
+  };
+  accessibility: {
+    highContrast: boolean;
+    fontSize: string;
+  };
+  privacy: {
+    profileVisibility: string;
+    activityVisibility: string;
+  };
+}
+
 export interface UserResponse {
   id: string;
   email: string;
@@ -14,3 +31,4 @@ export interface UserResponse {
     email: string;
     name: string;
   };
+}

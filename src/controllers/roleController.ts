@@ -5,18 +5,13 @@ import { AuthenticatedRequest, ControllerFunction } from '../types';
 import { 
   Result, 
   success, 
-  failure, 
-  fromPromise, 
-  mapResult,
-  chainResult
+  failure
 } from '../utils/errors';
 import { 
   handleServiceResult, 
   createController,
   getPaginationParams,
-  getSortParams,
-  buildSearchCondition,
-  formatPaginatedResponse
+  getSortParams
 } from '../utils/controller';
 import { notificationService } from '../services';
 
@@ -626,7 +621,11 @@ const updateRoleHandler: ControllerFunction = async (
   const params = req.body as RoleUpdateParams;
   const userId = req.user?.id;
 
-  const result = await updateRoleWithTransaction(roleId, params, userId);
+  // Ensure required parameters are strings (not undefined)
+  const safeRoleId = roleId || '';
+  const safeUserId = userId || '';
+  
+  const result = await updateRoleWithTransaction(safeRoleId, params, safeUserId);
   handleServiceResult(result, res, 200, formatRoleResponse);
 };
 
@@ -641,7 +640,11 @@ const deleteRoleHandler: ControllerFunction = async (
   const params = req.body as RoleDeleteParams;
   const userId = req.user?.id;
 
-  const result = await deleteRoleWithTransaction(roleId, params, userId);
+  // Ensure required parameters are strings (not undefined)
+  const safeRoleId = roleId || '';
+  const safeUserId = userId || '';
+  
+  const result = await deleteRoleWithTransaction(safeRoleId, params, safeUserId);
   handleServiceResult(result, res, 204);
 };
 
@@ -652,6 +655,7 @@ const listRolesHandler: ControllerFunction = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
+  // Use our new utility functions that handle ParsedQs properly
   const pagination = getPaginationParams(req.query);
   const sorting = getSortParams(req.query, 'name', 'ASC');
   
@@ -664,7 +668,10 @@ const listRolesHandler: ControllerFunction = async (
       undefined
   };
 
-  const result = await listRolesLogic(filters, req.tenant?.id);
+  // Ensure tenant ID is a string (not undefined)
+  const tenantId = req.tenant?.id || '';
+  
+  const result = await listRolesLogic(filters, tenantId);
   handleServiceResult(result, res);
 };
 

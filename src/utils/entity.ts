@@ -1,4 +1,4 @@
-import { Model, ModelCtor, Transaction, WhereOptions } from 'sequelize';
+import { Model, ModelStatic, Transaction, WhereOptions } from 'sequelize';
 import { Result, success, failure } from './errors';
 import logger from '../config/logger';
 
@@ -11,11 +11,17 @@ import logger from '../config/logger';
  * @returns Result containing the entity or failure
  */
 export const findById = async <T extends Model>(
-  model: ModelCtor<T>,
+  model: ModelStatic<T>,
   id: string | number,
   options: {
     transaction?: Transaction;
-    include?: any[];
+    include?: Array<{
+      model: ModelStatic<Model>;
+      as?: string;
+      include?: any[];
+      attributes?: string[];
+      required?: boolean;
+    }>;
     attributes?: string[];
     errorMessage?: string;
   } = {}
@@ -53,11 +59,17 @@ export const findById = async <T extends Model>(
  * @returns Result containing entities or failure
  */
 export const findAll = async <T extends Model>(
-  model: ModelCtor<T>,
+  model: ModelStatic<T>,
   options: {
     where?: WhereOptions;
-    include?: any[];
-    order?: any[];
+    include?: Array<{
+      model: ModelStatic<Model>;
+      as?: string;
+      include?: any[];
+      attributes?: string[];
+      required?: boolean;
+    }>;
+    order?: Array<[string, 'ASC' | 'DESC']>;
     limit?: number;
     offset?: number;
     transaction?: Transaction;
@@ -95,7 +107,7 @@ export const findAll = async <T extends Model>(
  * @returns Result containing the created entity or failure
  */
 export const create = async <T extends Model, D extends object>(
-  model: ModelCtor<T>,
+  model: ModelStatic<T>,
   data: D,
   options: {
     transaction?: Transaction;
@@ -159,7 +171,7 @@ export const update = async <T extends Model, D extends object>(
  * @returns Result containing boolean existence check
  */
 export const exists = async <T extends Model>(
-  model: ModelCtor<T>,
+  model: ModelStatic<T>,
   where: WhereOptions,
   options: {
     transaction?: Transaction;

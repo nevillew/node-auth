@@ -1,13 +1,13 @@
-import { Sequelize } from 'sequelize';
+import SequelizeOriginal from 'sequelize';
+const { Sequelize } = SequelizeOriginal as any;
 import { v4 as uuidv4 } from 'uuid';
-import { Result, success, failure, fromPromise, ErrorCode } from '../utils/errors';
+import { Result, success, failure, fromPromise, ErrorCode, chainResult } from '../utils/errors';
 import { TenantAttributes } from '../types';
 import logger from '../config/logger';
 import { withTransaction } from '../utils/transactions';
 
-// We'll need to convert the database manager to TypeScript later
-// For now, we'll import it as a require
-const { manager } = require('../config/database');
+// Import database manager using ES module syntax
+import { manager } from '../config/database';
 
 // Types for tenant service
 interface TenantConnection {

@@ -1,6 +1,6 @@
 import validator from 'validator';
 import { z } from 'zod';
-import { Result, success, failure, ErrorCode, sequenceResults, mapResult } from './errors';
+import { Result, success, failure, ErrorCode, mapResult, SuccessResult, ErrorResult } from './errors';
 import { ValidationError } from '../types';
 
 /**
@@ -282,9 +282,23 @@ export const sanitizeObject = <T extends Record<string, unknown>>(
           });
     };
     
-    // Use sequenceResults to transform array of Results to Result of array
+    // Transform array of Results to Result of array
     const entriesResultsArray = Object.entries(obj).map(sanitizeEntry);
-    const entriesResult = sequenceResults(entriesResultsArray);
+    
+    // Find the first failure, if any
+    const firstFailure = entriesResultsArray.find(result => !result.ok);
+    
+    // Return early if there's a failure
+    if (firstFailure && !firstFailure.ok) {
+      return firstFailure as ErrorResult<T>;
+    }
+    
+    // Extract values from successful results
+    const entries = entriesResultsArray.map(result => 
+      (result as SuccessResult<readonly [string, unknown]>).value
+    );
+    
+    const entriesResult = success(entries);
     
     // Transform the Result of entries array to Result of object
     return mapResult(entriesResult, entries => 

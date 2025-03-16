@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import path from 'path';
+// import path from 'path'; // Will be used with the extname function below
 import logger from '../config/logger';
 import { cacheManager } from '../services/cacheManager';
 
@@ -71,7 +71,8 @@ class DocAnalyzer {
       }
 
       const content = await fs.readFile(filePath, 'utf8');
-      const ext = path.extname(filePath);
+      // Get file extension for potential future use
+      // const ext = path.extname(filePath);
       
       const results: AnalysisResult = {
         path: filePath,

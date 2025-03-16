@@ -1,6 +1,6 @@
 import { Transaction } from 'sequelize';
 import { sequelize } from '../models';
-import { Result, success, failure, ErrorCode, chainResult } from './errors';
+import { Result, success, failure, ErrorCode } from './errors';
 import logger from '../config/logger';
 
 /**
@@ -119,7 +119,8 @@ export const withTransaction = async <T>(
           t.finished = true; 
           
           // Create a new transaction and update the reference
-          const newTransaction = await sequelize.transaction({
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const _newTransaction = await sequelize.transaction({
             isolationLevel: defaultOptions.isolationLevel
           });
           
@@ -179,7 +180,7 @@ export const withTransactionAll = async <T>(
       // Check if any operation failed
       const failedResult = results.find(result => !result.ok);
       if (failedResult && !failedResult.ok) {
-        return failedResult as Result<any>;
+        return failedResult as Result<T[]>;
       }
       
       // Extract values from successful results using a type guard
@@ -232,9 +233,9 @@ export const withTransactionAll = async <T>(
  *   ]
  * );
  */
-export const withTransactionChain = async <T, I = any>(
+export const withTransactionChain = async <T, I = unknown>(
   initialData: I,
-  operations: ReadonlyArray<(previousResult: any, t: Transaction) => Promise<Result<any>>>,
+  operations: ReadonlyArray<(previousResult: unknown, t: Transaction) => Promise<Result<unknown>>>,
   externalTransaction?: Transaction,
   options: TransactionOptions = {}
 ): Promise<Result<T>> => {
@@ -247,7 +248,7 @@ export const withTransactionChain = async <T, I = any>(
     // Use reduce to chain operations in a functional way
     // This is a more declarative approach than recursion
     return operations.reduce(
-      async (previousPromise: Promise<Result<any>>, operation) => {
+      async (previousPromise: Promise<Result<unknown>>, operation) => {
         const previousResult = await previousPromise;
         
         // Short-circuit on failure

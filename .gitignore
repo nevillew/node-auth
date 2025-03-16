@@ -2,3 +2,9 @@ node_modules/
 .env
 .DS_Store
 .aider*
+dist/
+coverage/
+*.log
+*.log.*
+*.log-*
+*.log/*

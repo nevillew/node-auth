@@ -38,10 +38,10 @@ export const xssOptions: xss.IFilterXSSOptions = {
 
 // SQL injection patterns (pure configuration)
 export const sqlInjectionPatterns: RegExp[] = [
-  /(\%27)|(\')|(\-\-)|(\%23)|(#)/i,
-  /((\%3D)|(=))[^\n]*((\%27)|(\')|(\-\-)|(\%3B)|(;))/i,
-  /\w*((\%27)|(\'))((\%6F)|o|(\%4F))((\%72)|r|(\%52))/i,
-  /((\%27)|(\'))union/i,
+  /(%27)|(')|(--)|(#)/i,
+  /((%3D)|(=))[^\n]*((%27)|(')|(--)|(;))/i,
+  /\w*((%27)|(')){1}((%6F)|o|(%4F)){1}((%72)|r|(%52))/i,
+  /((%27)|(')){1}union/i,
   /exec(\s|\+)+(s|x)p\w+/i,
   /UNION\s+ALL\s+SELECT/i
 ];

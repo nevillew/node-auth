@@ -1,19 +1,18 @@
 import Joi from 'joi';
 import { 
-  PasswordPolicy, 
-  UserAttributes,
-  FontSize, 
-  VisibilityType,
-  ThemeType 
+  PasswordPolicy 
+  // Importing types but not using them directly in this file
+  // UserAttributes,
+  // FontSize, 
+  // VisibilityType,
+  // ThemeType 
 } from '../types';
+import { Tenant } from '../models';
 
 /**
  * Get password validation based on tenant's security policy
  */
 const getPasswordValidation = async (tenantId: string): Promise<{ pattern: string; policy: PasswordPolicy }> => {
-  // Import models only when needed to avoid circular dependencies
-  const { Tenant } = require('../models');
-  
   const tenant = await Tenant.findByPk(tenantId);
   const policy = tenant?.securityPolicy?.password || {
     minLength: 12,
@@ -67,7 +66,7 @@ const updateUserSchema = Joi.object({
   name: Joi.string().min(2).max(100).optional(),
   avatar: Joi.string().uri().allow('').optional(),
   profile: Joi.object({
-    phoneNumber: Joi.string().pattern(/^[+]*[(]{0,1}[0-9]{1,4}[)]{0,1}[-\s\./0-9]*$/).optional(),
+    phoneNumber: Joi.string().pattern(/^[+]*[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/).optional(),
     address: Joi.string().max(200).optional(),
     timezone: Joi.string().valid(...Intl.supportedValuesOf('timeZone')).optional(),
     language: Joi.string().length(2).optional(),

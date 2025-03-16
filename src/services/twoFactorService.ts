@@ -306,7 +306,7 @@ export const verify = async (
     }
 
     let verified = false;
-    let verificationDetails: Record<string, any> = {};
+    const verificationDetails: Record<string, any> = {};
 
     if (type === 'totp' && user.twoFactorSecret) {
       verified = speakeasy.totp.verify({

@@ -8,7 +8,7 @@ import fs from 'fs/promises';
 import logger from '../config/logger';
 import cliProgress from 'cli-progress';
 import colors from 'ansi-colors';
-import { loadConfig } from '../config/analyzer';
+// Analyzer config is imported from config/analyzer
 
 interface Report {
   timestamp: string;

@@ -16,9 +16,10 @@ import { ErrorCodes } from '../constants/errors';
 
 /**
  * Represents an error result with the error details
- * @template T The type that would have been returned in success case
+ * This type doesn't need a generic parameter since it doesn't carry a success value
+ * but we maintain it for consistent typing with Result<T>
  */
-export type ErrorResult<T> = { ok: false; error: AppErrorOptions };
+export type ErrorResult = { ok: false; error: AppErrorOptions };
 
 /**
  * Represents a successful result with the returned value
@@ -30,7 +31,7 @@ export type SuccessResult<T> = { ok: true; value: T };
  * Union type representing either a success or error result
  * @template T The type of the success value
  */
-export type Result<T> = SuccessResult<T> | ErrorResult<T>;
+export type Result<T> = SuccessResult<T> | ErrorResult;
 
 /**
  * Creates a success result containing the provided value
@@ -48,15 +49,14 @@ export const success = <T>(value: T): SuccessResult<T> => ({ ok: true, value });
 /**
  * Creates an error result with the provided error options
  * 
- * @template T The type that would have been returned in success case
  * @param {AppErrorOptions} options - Error details
- * @returns {ErrorResult<T>} An error result containing the error details
+ * @returns {ErrorResult} An error result containing the error details
  * 
  * @example
  * // Returns { ok: false, error: { message: 'Not found', statusCode: 404 } }
  * const result = failure({ message: 'Not found', statusCode: 404, code: ErrorCode.NOT_FOUND });
  */
-export const failure = <T>(options: AppErrorOptions): ErrorResult<T> => ({
+export const failure = (options: AppErrorOptions): ErrorResult => ({
   ok: false,
   error: options,
 });
@@ -64,20 +64,19 @@ export const failure = <T>(options: AppErrorOptions): ErrorResult<T> => ({
 /**
  * Creates a standard error result with the specified error code
  * 
- * @template T The type that would have been returned in success case
  * @param {keyof typeof ErrorCodes} errorCode - Standard error code from the ErrorCodes constant
  * @param {Record<string, unknown>} [details] - Optional additional error details
- * @returns {ErrorResult<T>} An error result with standardized error information
+ * @returns {ErrorResult} An error result with standardized error information
  * 
  * @example
  * // Returns a standardized not found error result
- * const result = standardError<User>('RESOURCE_NOT_FOUND', { resourceType: 'User', id: '123' });
+ * const result = standardError('RESOURCE_NOT_FOUND', { resourceType: 'User', id: '123' });
  */
-export const standardError = <T>(
+export const standardError = (
   errorCode: keyof typeof ErrorCodes, 
   details?: Record<string, unknown>,
   source?: string
-): ErrorResult<T> => {
+): ErrorResult => {
   const errorInfo = ErrorCodes[errorCode];
   
   // Map error code category to appropriate status code
@@ -117,7 +116,7 @@ export const standardError = <T>(
       statusCode = 500;
   }
   
-  return failure<T>({
+  return failure({
     message: errorInfo.message,
     code: ErrorCode[errorCode as keyof typeof ErrorCode] || ErrorCode.INTERNAL_ERROR,
     statusCode,
@@ -198,20 +197,19 @@ const DATABASE_ERROR_PATTERNS: ReadonlyArray<DatabaseErrorPattern> = [
  * to return appropriate typed error codes, improving error handling
  * throughout the application.
  * 
- * @template T The type that would have been returned in success case
  * @param {Error} error - The database error that occurred
  * @param {string} [source] - Optional source identifier
- * @returns {ErrorResult<T>} A standardized error result
+ * @returns {ErrorResult} A standardized error result
  * 
  * @example
  * // Convert Sequelize errors to standard error codes
  * try {
  *   await User.create(data);
  * } catch (err) {
- *   return databaseError<User>(err, 'UserService.create');
+ *   return databaseError(err, 'UserService.create');
  * }
  */
-export const databaseError = <T>(error: Error, source?: string): ErrorResult<T> => {
+export const databaseError = (error: Error, source?: string): ErrorResult => {
   const errorMessage = error.message;
   
   // Find matching error pattern using functional pattern matching
@@ -220,7 +218,7 @@ export const databaseError = <T>(error: Error, source?: string): ErrorResult<T> 
   );
   
   if (matchedPattern) {
-    return failure<T>({
+    return failure({
       message: matchedPattern.message,
       statusCode: matchedPattern.statusCode,
       code: matchedPattern.errorCode,
@@ -230,7 +228,7 @@ export const databaseError = <T>(error: Error, source?: string): ErrorResult<T> 
   }
   
   // Default database error
-  return failure<T>({
+  return failure({
     message: 'Database query failed',
     statusCode: 500,
     code: ErrorCode.QUERY_ERROR,
@@ -242,41 +240,40 @@ export const databaseError = <T>(error: Error, source?: string): ErrorResult<T> 
 /**
  * Maps resource conflicts to appropriate standard error codes
  * 
- * @template T The type that would have been returned in success case
  * @param {string} conflictType - The type of conflict that occurred
  * @param {Record<string, unknown>} [details] - Optional additional conflict details
  * @param {string} [source] - Optional source identifier
- * @returns {ErrorResult<T>} A standardized error result
+ * @returns {ErrorResult} A standardized error result
  * 
  * @example
  * // Return a version conflict error
  * if (resource.version !== requestedVersion) {
- *   return resourceConflictError<User>(
+ *   return resourceConflictError(
  *     'version', 
  *     { current: resource.version, requested: requestedVersion }
  *   );
  * }
  */
-export const resourceConflictError = <T>(
+export const resourceConflictError = (
   conflictType: 'exists' | 'version' | 'locked' | 'deleted' | 'inactive' | 'dependency',
   details?: Record<string, unknown>,
   source?: string
-): ErrorResult<T> => {
+): ErrorResult => {
   switch (conflictType) {
     case 'exists':
-      return standardError<T>('RESOURCE_EXISTS', details, source);
+      return standardError('RESOURCE_EXISTS', details, source);
     case 'version':
-      return standardError<T>('RESOURCE_VERSION_CONFLICT', details, source);
+      return standardError('RESOURCE_VERSION_CONFLICT', details, source);
     case 'locked':
-      return standardError<T>('RESOURCE_LOCKED', details, source);
+      return standardError('RESOURCE_LOCKED', details, source);
     case 'deleted':
-      return standardError<T>('RESOURCE_DELETED', details, source);
+      return standardError('RESOURCE_DELETED', details, source);
     case 'inactive':
-      return standardError<T>('RESOURCE_INACTIVE', details, source);
+      return standardError('RESOURCE_INACTIVE', details, source);
     case 'dependency':
-      return standardError<T>('RESOURCE_DEPENDENCY_ERROR', details, source);
+      return standardError('RESOURCE_DEPENDENCY_ERROR', details, source);
     default:
-      return standardError<T>('RESOURCE_CONFLICT', details, source);
+      return standardError('RESOURCE_CONFLICT', details, source);
   }
 };
 
@@ -304,7 +301,15 @@ export const handleResult = <T, U>(
   result: Result<T>,
   onSuccess: (value: T) => U,
   onError: (error: AppErrorOptions) => U,
-): U => (result.ok ? onSuccess(result.value) : onError(result.error));
+): U => {
+  if (result.ok) {
+    return onSuccess(result.value);
+  } else {
+    // Type assertion to access the error property
+    const errorResult = result as ErrorResult;
+    return onError(errorResult.error);
+  }
+};
 
 /**
  * Transforms the success value of a result using the provided function.
@@ -324,8 +329,14 @@ export const handleResult = <T, U>(
  * const result = success(42);
  * const doubled = mapResult(result, x => x * 2);
  */
-export const mapResult = <T, U>(result: Result<T>, fn: (value: T) => U): Result<U> =>
-  result.ok ? success(fn(result.value)) : result;
+export const mapResult = <T, U>(result: Result<T>, fn: (value: T) => U): Result<U> => {
+  if (result.ok) {
+    return success(fn(result.value));
+  } else {
+    // Need to type assert here to maintain compatibility
+    return result as unknown as Result<U>;
+  }
+};
 
 /**
  * Transforms an array of Results into a Result of array
@@ -353,7 +364,8 @@ export const sequenceResults = <T>(results: Result<T>[]): Result<T[]> => {
   
   // Return early if there's a failure
   if (firstFailure && !firstFailure.ok) {
-    return firstFailure;
+    // Type assertion to maintain compatibility
+    return firstFailure as unknown as Result<T[]>;
   }
   
   // Use type assertion to safely extract values
@@ -386,8 +398,14 @@ export const sequenceResults = <T>(results: Result<T>[]): Result<T[]> => {
  * const final = chainResult(result, val => divide(val, 2));
  * // final: { ok: true, value: 5 }
  */
-export const chainResult = <T, U>(result: Result<T>, fn: (value: T) => Result<U>): Result<U> =>
-  result.ok ? fn(result.value) : result;
+export const chainResult = <T, U>(result: Result<T>, fn: (value: T) => Result<U>): Result<U> => {
+  if (result.ok) {
+    return fn(result.value);
+  } else {
+    // Type assertion to maintain compatibility
+    return result as unknown as Result<U>;
+  }
+};
 
 /**
  * Converts a promise to a Result, capturing any thrown errors.
@@ -422,11 +440,11 @@ export const fromPromise = async <T>(
     
     // Check for specific error types to provide better error codes
     if (error.name === 'SequelizeError' || error.name === 'SequelizeDatabaseError') {
-      return databaseError<T>(error, source);
+      return databaseError(error, source);
     }
     
     if (error.name === 'TimeoutError' || error.message.includes('timeout')) {
-      return standardError<T>('TIMEOUT', { originalError: error.message }, source);
+      return standardError('TIMEOUT', { originalError: error.message }, source);
     }
     
     return failure({
@@ -470,7 +488,7 @@ export const tryCatch = <T>(fn: () => T, source?: string): Result<T> => {
     const errorMessage = error.message.toLowerCase();
     
     if (errorMessage.includes('parse') || errorMessage.includes('json') || errorMessage.includes('syntax')) {
-      return standardError<T>('INVALID_FORMAT', { originalError: error.message }, source);
+      return standardError('INVALID_FORMAT', { originalError: error.message }, source);
     }
     
     return failure({
