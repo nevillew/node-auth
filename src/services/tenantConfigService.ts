@@ -1,6 +1,5 @@
 import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
-import { DatabaseManager } from '../config/database';
 
 // Import the manager with proper typing
 import { manager } from '../config/database';

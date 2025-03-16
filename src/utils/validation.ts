@@ -1,6 +1,6 @@
 import validator from 'validator';
 import { z } from 'zod';
-import { Result, success, failure, ErrorCode } from './errors';
+import { Result, success, failure, ErrorCode, sequenceResults, mapResult } from './errors';
 import { ValidationError } from '../types';
 
 /**
