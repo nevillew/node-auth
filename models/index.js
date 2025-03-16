@@ -14,17 +14,18 @@ const basename = path.basename(__filename);
 
 // Load environment-specific configuration
 const env = process.env.NODE_ENV || 'development';
-const config = require(__dirname + '/../config/config.js')[env];
+import config from '../config/config';
+const dbConfig = config[env as keyof typeof config];
 
 // Initialize database object
 const db = {} as Record<string, any>;
 
 // Create Sequelize instance
 let sequelize: Sequelize;
-if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable || ''] as string, config);
+if (dbConfig.use_env_variable) {
+  sequelize = new Sequelize(process.env[dbConfig.use_env_variable || ''] as string, dbConfig);
 } else {
-  sequelize = new Sequelize(config.database, config.username, config.password, config);
+  sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.password, dbConfig);
 }
 
 // Load all model files

@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createAppError } from './errorHandler';
 import logger from '../config/logger';
 import { SecurityAuditLog } from '../models';
-import { timingSafeEqual, randomBytes } from 'crypto';
+import crypto, { timingSafeEqual, randomBytes } from 'crypto';
 
 /**
  * Pure function to create CSRF middleware configuration
@@ -42,7 +42,7 @@ const createCookieConfig = (httpOnly = false) => ({
  * Using crypto for better randomness than UUID
  */
 const generateToken = (): string => {
-  return crypto.randomBytes(32).toString('hex');
+  return randomBytes(32).toString('hex');
 };
 
 /**

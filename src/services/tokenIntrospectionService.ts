@@ -8,6 +8,17 @@ const getRedisClient = async () => {
   return await createRedisClient();
 };
 
+// Initialize Redis client
+let redisClient: Awaited<ReturnType<typeof createRedisClient>> | null = null;
+
+// Get Redis client with lazy initialization
+const getOrCreateRedisClient = async () => {
+  if (!redisClient) {
+    redisClient = await createRedisClient();
+  }
+  return redisClient;
+};
+
 // Types for the service
 interface TokenIntrospection {
   active: boolean;
@@ -38,6 +49,7 @@ const getCachedIntrospection = async (token: string): Promise<Result<TokenIntros
     let cached: string | null = null;
     
     try {
+      const redisClient = await getOrCreateRedisClient();
       cached = await redisClient.get(cacheKey);
     } catch (redisError) {
       logger.warn('Redis cache read failed, using fallback:', { error: redisError });
@@ -88,6 +100,7 @@ const cacheIntrospection = async (
     const cacheKey = `token:${token}:introspection`;
     
     try {
+      const redisClient = await getOrCreateRedisClient();
       await redisClient.set(
         cacheKey,
         JSON.stringify(introspection),
@@ -182,6 +195,7 @@ export const revokeToken = async (token: string): Promise<Result<boolean>> => {
     const cacheKey = `token:${token}:introspection`;
     
     try {
+      const redisClient = await getOrCreateRedisClient();
       await redisClient.del(cacheKey);
     } catch (redisError) {
       logger.warn('Redis delete failed, using fallback:', { error: redisError });
