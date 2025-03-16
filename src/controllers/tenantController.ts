@@ -108,8 +108,8 @@ const getLogoUrl = async (logoKey: string): Promise<Result<string>> => {
 export const formatTenantResponse = async (
   tenant: any, 
   includeDetails: boolean = false
-): Promise<any> => {
-  const formatted = {
+): Promise<Record<string, any>> => {
+  const formatted: Record<string, any> = {
     id: tenant.id,
     name: tenant.name,
     slug: tenant.slug,
@@ -132,7 +132,7 @@ export const formatTenantResponse = async (
     formatted['securityPolicy'] = tenant.securityPolicy;
     
     if (tenant.Users) {
-      formatted['users'] = tenant.Users.map(user => ({
+      formatted['users'] = tenant.Users.map((user: any) => ({
         id: user.id,
         email: user.email,
         name: user.name,

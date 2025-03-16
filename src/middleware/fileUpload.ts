@@ -102,7 +102,7 @@ export const validateFileType = (
     return failure({
       message: 'Invalid file type',
       statusCode: 400,
-      code: 'INVALID_FILE_TYPE',
+      code: ErrorCode.INVALID_FILE_TYPE,
       details: {
         allowed: Object.keys(allowedTypes),
         received: mimetype
@@ -124,7 +124,7 @@ export const validateFileSize = (
     return failure({
       message: 'File too large',
       statusCode: 400,
-      code: 'FILE_TOO_LARGE',
+      code: ErrorCode.FILE_TOO_LARGE,
       details: {
         maxSize: `${Math.round(maxSize / 1024 / 1024)}MB`,
         received: `${Math.round(fileSize / 1024 / 1024)}MB`
@@ -149,7 +149,7 @@ export const validateFileExtension = (
     return failure({
       message: 'Invalid file extension',
       statusCode: 400,
-      code: 'INVALID_FILE_EXTENSION',
+      code: ErrorCode.INVALID_FILE_TYPE,
       details: {
         allowed: validExts[mimetype],
         received: originalExt
@@ -174,7 +174,7 @@ export const validateFileHeader = (
     return failure({
       message: 'File content does not match declared type',
       statusCode: 400,
-      code: 'INVALID_FILE_CONTENT'
+      code: ErrorCode.INVALID_FILE_TYPE
     });
   }
   
@@ -195,7 +195,7 @@ export const scanForMalware = (
     return failure({
       message: 'File appears to contain malware',
       statusCode: 400,
-      code: 'MALWARE_DETECTED'
+      code: ErrorCode.FILE_PROCESSING_ERROR
     });
   }
   
@@ -347,6 +347,7 @@ export const uploadToS3 = async (
     return failure({
       message: 'Failed to upload file',
       statusCode: 500,
+      code: ErrorCode.FILE_UPLOAD_ERROR,
       originalError: error instanceof Error ? error : new Error('Upload failed')
     });
   }

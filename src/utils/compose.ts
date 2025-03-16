@@ -36,7 +36,7 @@ import { Result, success, failure, ErrorCode } from './errors';
  * // Use the composed function
  * const result = processUser(userData);
  */
-export const compose = <T, U>(...fns: Function[]): (arg: T) => U => {
+export const compose = <T, U>(...fns: Array<(arg: any) => any>): (arg: T) => U => {
   return (arg: T) => fns.reduceRight((result, fn) => fn(result), arg);
 };
 

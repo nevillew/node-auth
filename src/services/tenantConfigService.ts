@@ -43,7 +43,7 @@ const getTenantConnection = async (tenantId: string): Promise<Result<TenantConne
 /**
  * Get tenant configuration
  */
-export const getConfig = async (tenantId: string): Promise<Result<Record<string, any>>> => {
+export const getConfig = async (tenantId: string): Promise<Result<TenantConfig>> => {
   try {
     const connectionResult = await getTenantConnection(tenantId);
     if (!connectionResult.ok) {
@@ -60,7 +60,7 @@ export const getConfig = async (tenantId: string): Promise<Result<Record<string,
       });
     }
     
-    return success(tenant.settings);
+    return success(tenant.settings as TenantConfig);
   } catch (err) {
     logger.error('Error getting tenant config:', { error: err, tenantId });
     return failure({
@@ -105,7 +105,7 @@ export const updateConfig = async (
 /**
  * Get tenant feature flags
  */
-export const getFeatureFlags = async (tenantId: string): Promise<Result<Record<string, boolean>>> => {
+export const getFeatureFlags = async (tenantId: string): Promise<Result<FeatureFlags>> => {
   try {
     const connectionResult = await getTenantConnection(tenantId);
     if (!connectionResult.ok) {
@@ -122,7 +122,7 @@ export const getFeatureFlags = async (tenantId: string): Promise<Result<Record<s
       });
     }
     
-    return success(tenant.featureFlags);
+    return success(tenant.featureFlags as FeatureFlags);
   } catch (err) {
     logger.error('Error getting tenant feature flags:', { error: err, tenantId });
     return failure({

@@ -88,8 +88,8 @@ export const checkRoleNameExists = async (
 export const formatRoleResponse = (
   role: any,
   includeUsers = false
-): any => {
-  const formatted = {
+): Record<string, any> => {
+  const formatted: Record<string, any> = {
     id: role.id,
     name: role.name,
     description: role.description,
@@ -101,7 +101,7 @@ export const formatRoleResponse = (
   };
   
   if (includeUsers && role.Users) {
-    formatted['users'] = role.Users.map(user => ({
+    formatted['users'] = role.Users.map((user: any) => ({
       id: user.id,
       email: user.email,
       name: user.name
@@ -115,7 +115,7 @@ export const formatRoleResponse = (
  * Track changes to a role for auditing (pure function)
  */
 export const trackRoleChanges = (
-  original: any,
+  original: { name: string; description: string; scopes: string[] },
   updates: RoleUpdateParams
 ): Record<string, any> => {
   const changes: Record<string, any> = {};

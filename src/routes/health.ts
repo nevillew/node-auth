@@ -141,7 +141,7 @@ const checkRedisReplicaHealth = async (): Promise<ServiceCheck | null> => {
 /**
  * Generate system metrics (pure function)
  */
-const generateSystemMetrics = (startTime: number) => {
+const generateSystemMetrics = (startTime: number): Record<string, any> => {
   return {
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),

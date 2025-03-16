@@ -12,7 +12,7 @@ const getRedisClient = async () => {
 let redisClient: Awaited<ReturnType<typeof createRedisClient>> | null = null;
 
 // Get Redis client with lazy initialization
-const getOrCreateRedisClient = async () => {
+const getOrCreateRedisClient = async (): Promise<Awaited<ReturnType<typeof createRedisClient>>> => {
   if (!redisClient) {
     redisClient = await createRedisClient();
   }

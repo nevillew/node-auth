@@ -380,8 +380,8 @@ export const searchUsers = async (
     } = params;
     
     // Define pure function to build the base where condition
-    const buildBaseCondition = () => {
-      const where: any = {};
+    const buildBaseCondition = (): Record<string, any> => {
+      const where: Record<string, any> = {};
       
       if (status) where.status = status;
       if (tenant) where.tenantId = tenant;
@@ -390,7 +390,7 @@ export const searchUsers = async (
     };
     
     // Define pure function to add search query condition
-    const addSearchCondition = (where: any) => {
+    const addSearchCondition = (where: Record<string, any>): Record<string, any> => {
       if (query) {
         where[Op.or] = [
           { email: { [Op.iLike]: `%${query}%` } },
@@ -401,7 +401,7 @@ export const searchUsers = async (
     };
     
     // Define pure function to add date range condition
-    const addDateRangeCondition = (where: any) => {
+    const addDateRangeCondition = (where: Record<string, any>): Record<string, any> => {
       if (lastLoginStart || lastLoginEnd) {
         where.lastLoginAt = {};
         if (lastLoginStart) where.lastLoginAt[Op.gte] = new Date(lastLoginStart);
@@ -411,7 +411,7 @@ export const searchUsers = async (
     };
     
     // Use function composition to build the complete where condition
-    const whereCondition = compose(
+    const whereCondition = compose<void, Record<string, any>>(
       addDateRangeCondition,
       addSearchCondition,
       buildBaseCondition

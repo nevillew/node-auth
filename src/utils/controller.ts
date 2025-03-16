@@ -153,13 +153,13 @@ export const buildDateRangeCondition = (
  * and combines them into a single condition.
  * 
  * @param {...any[]} conditions - Conditions to combine
- * @returns {any} Combined condition object
+ * @returns {Record<string, any>} Combined condition object
  * 
  * @example
  * // Returns: { [Op.and]: [condition1, condition2] }
  * const whereClause = combineConditions(condition1, condition2);
  */
-export const combineConditions = (...conditions: any[]): any => {
+export const combineConditions = (...conditions: any[]): Record<string, any> => {
   const validConditions = conditions.filter(Boolean);
   if (validConditions.length === 0) return {};
   if (validConditions.length === 1) return validConditions[0];

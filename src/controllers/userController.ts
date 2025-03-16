@@ -161,7 +161,13 @@ const createUserWithProfileHandler: ControllerFunction = async (
   const { userData, profileData, roles } = req.body;
   
   // Use the functional transaction chain to handle the entire operation as a unit
-  const result = await withTransactionChain(
+  const result = await withTransactionChain<{
+    id: string;
+    email: string;
+    name: string;
+    profile: any;
+    roles: string[];
+  }>(
     // Initial data
     { userData, profileData, roles, requestUserId: req.user?.id },
     

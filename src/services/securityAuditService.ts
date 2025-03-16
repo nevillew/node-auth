@@ -86,6 +86,7 @@ const fetchAuditLogs = async (
     return failure({
       message: 'Error fetching audit logs',
       statusCode: 500,
+      code: ErrorCode.DATABASE_ERROR,
       originalError: err instanceof Error ? err : new Error('Unknown error')
     });
   }

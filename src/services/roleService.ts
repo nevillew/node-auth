@@ -29,7 +29,7 @@ interface AssignRolesParams {
  * Check if removing admin role and user is last admin
  */
 const checkLastAdmin = async (
-  currentRoles: any[],
+  currentRoles: { id: string; name: string }[],
   roleIds: string[],
   transaction?: Transaction
 ): Promise<Result<void>> => {
@@ -51,7 +51,8 @@ const checkLastAdmin = async (
       if (adminCount === 1) {
         return failure({
           message: 'Cannot remove last admin role',
-          statusCode: 400
+          statusCode: 400,
+          code: ErrorCode.RESOURCE_DEPENDENCY_ERROR
         });
       }
       
@@ -61,6 +62,7 @@ const checkLastAdmin = async (
       return failure({
         message: 'Error checking admin roles',
         statusCode: 500,
+        code: ErrorCode.DATABASE_ERROR,
         originalError: err instanceof Error ? err : new Error('Unknown error')
       });
     }
@@ -108,7 +110,8 @@ export const assignRolesToUser = async (
     if (roles.length !== roleIds.length) {
       return failure({
         message: 'One or more roles not found',
-        statusCode: 400
+        statusCode: 400,
+        code: ErrorCode.RESOURCE_NOT_FOUND
       });
     }
     
@@ -167,6 +170,7 @@ export const assignRolesToUser = async (
       return failure({
         message: 'Error assigning roles',
         statusCode: 500,
+        code: ErrorCode.DATABASE_ERROR,
         originalError: err instanceof Error ? err : new Error('Unknown error')
       });
     }
