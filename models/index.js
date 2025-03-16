@@ -15,15 +15,15 @@ const basename = path.basename(__filename);
 // Load environment-specific configuration
 const env = process.env.NODE_ENV || 'development';
 import config from '../config/config';
-const dbConfig = config[env as keyof typeof config];
+const dbConfig = config[env];
 
 // Initialize database object
-const db = {} as Record<string, any>;
+const db = {};
 
 // Create Sequelize instance
-let sequelize: Sequelize;
+let sequelize;
 if (dbConfig.use_env_variable) {
-  sequelize = new Sequelize(process.env[dbConfig.use_env_variable || ''] as string, dbConfig);
+  sequelize = new Sequelize(process.env[dbConfig.use_env_variable || ''], dbConfig);
 } else {
   sequelize = new Sequelize(dbConfig.database, dbConfig.username, dbConfig.password, dbConfig);
 }
@@ -47,7 +47,7 @@ fs.readdirSync(__dirname)
 // Set up associations between models
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
-    db[modelName].associate(db as unknown as ModelRegistry);
+    db[modelName].associate(db);
   }
 });
 
