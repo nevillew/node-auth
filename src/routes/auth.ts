@@ -112,7 +112,7 @@ const handleLocalLogin = async (req: Request, res: Response, next: NextFunction)
         
         return res.status(401).json(info);
       }
-
+      
       // Reset failed attempts on successful login
       await user.update({
         failedLoginAttempts: 0,
