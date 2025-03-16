@@ -182,20 +182,18 @@ export const combineResults = (
  * const result = sequenceResults(itemResults);
  */
 export const sequenceResults = <T>(results: Result<T>[]): Result<T[]> => {
+  // Use functional approach with find and map
   // Find the first failure, if any
   const firstFailure = results.find(result => !result.ok);
+  
+  // Return early if there's a failure
   if (firstFailure && !firstFailure.ok) {
     return firstFailure;
   }
   
-  // Extract values from successful results using type guard
-  const values = results.map(result => {
-    // Type guard to ensure we only access .value on success results
-    if (!result.ok) {
-      throw new Error('Unexpected failure in sequenceResults. This should not happen.');
-    }
-    return result.value;
-  });
+  // Use type assertion to safely extract values
+  // This is safe because we've already checked that all results are successful
+  const values = results.map(result => (result as SuccessResult<T>).value);
   
   return success(values);
 };

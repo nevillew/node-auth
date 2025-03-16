@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { SecurityAuditLog, User } from '../models';
 import { SecurityAuditLogAttributes } from '../types';
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, ErrorCode } from '../utils/errors';
 import logger from '../config/logger';
 
 // Types for security audit service

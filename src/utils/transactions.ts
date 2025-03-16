@@ -240,19 +240,20 @@ export const withTransactionChain = async <T, I = any>(
 ): Promise<Result<T>> => {
   return withTransaction(async (t) => {
     // Use reduce to chain operations in a more functional way
-    return operations.reduce(
-      async (previousPromise: Promise<Result<any>>, operation) => {
-        const previousResult = await previousPromise;
-        
-        // Short-circuit on failure
-        if (!previousResult.ok) {
-          return previousResult;
-        }
-        
-        // Execute next operation with the result of the previous one
-        return operation(previousResult.value, t);
-      },
-      Promise.resolve(success(initialData))
-    ) as Promise<Result<T>>;
+    // This is a pure functional approach to sequential async operations
+    const executeOperations = async (
+      ops: ReadonlyArray<(previousResult: any, t: Transaction) => Promise<Result<any>>>,
+      initialResult: Result<any>
+    ): Promise<Result<any>> => {
+      if (ops.length === 0) return initialResult;
+      if (!initialResult.ok) return initialResult;
+      
+      const [currentOp, ...remainingOps] = ops;
+      const nextResult = await currentOp(initialResult.value, t);
+      
+      return executeOperations(remainingOps, nextResult);
+    };
+    
+    return executeOperations(operations, success(initialData)) as Promise<Result<T>>;
   }, externalTransaction, options);
 };

@@ -266,29 +266,32 @@ export const sanitizeObject = <T extends Record<string, unknown>>(
   parentKey: string = 'root'
 ): Result<T> => {
   try {
-    // Create a new object to maintain immutability
-    const sanitized: Record<string, unknown> = {};
-    
-    // Process each entry in the object
-    const entries = Object.entries(obj);
-    
-    for (const [key, value] of entries) {
-      const fullKey = parentKey === 'root' ? key : `${parentKey}.${key}`;
-      const sanitizeResult = sanitizeValue(value, fullKey);
-      
-      if (!sanitizeResult.ok) {
-        return failure({
-          message: `Failed to sanitize property '${fullKey}'`,
-          statusCode: 400,
-          code: ErrorCode.OBJECT_VALIDATION_ERROR,
-          details: sanitizeResult.error
+    // Use functional approach with Object.entries and reduce
+    return Object.entries(obj).reduce<Result<Record<string, unknown>>>(
+      (accResult, [key, value]) => {
+        // Short-circuit if previous operation failed
+        if (!accResult.ok) return accResult;
+        
+        const fullKey = parentKey === 'root' ? key : `${parentKey}.${key}`;
+        const sanitizeResult = sanitizeValue(value, fullKey);
+        
+        if (!sanitizeResult.ok) {
+          return failure({
+            message: `Failed to sanitize property '${fullKey}'`,
+            statusCode: 400,
+            code: ErrorCode.OBJECT_VALIDATION_ERROR,
+            details: sanitizeResult.error
+          });
+        }
+        
+        // Create a new object with the sanitized value
+        return success({
+          ...accResult.value,
+          [key]: sanitizeResult.value
         });
-      }
-      
-      sanitized[key] = sanitizeResult.value;
-    }
-    
-    return success(sanitized as T);
+      },
+      success({} as Record<string, unknown>)
+    ) as Result<T>;
   } catch (err) {
     return failure({
       message: 'Error sanitizing object',

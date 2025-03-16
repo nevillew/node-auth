@@ -1,5 +1,5 @@
 import NodeCache from 'node-cache';
-import { Result, success, failure } from '../utils/errors';
+import { Result, success, failure, ErrorCode } from '../utils/errors';
 
 // Initialize in-memory cache
 const cache = new NodeCache({

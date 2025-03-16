@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../types';
 import { createAppError } from './errorHandler';
-import { Result, success, failure, fromPromise } from '../utils/errors';
+import { Result, success, failure, fromPromise, ErrorCode } from '../utils/errors';
 import OAuth2Server from 'oauth2-server';
 import rateLimit from 'express-rate-limit';
 import { validateCsrfToken } from './csrf';

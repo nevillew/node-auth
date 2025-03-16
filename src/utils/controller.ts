@@ -160,11 +160,15 @@ export const buildDateRangeCondition = (
  * const whereClause = combineConditions(condition1, condition2);
  */
 export const combineConditions = (...conditions: any[]): Record<string, any> => {
+  // Use functional approach with filter and reduce
   const validConditions = conditions.filter(Boolean);
-  if (validConditions.length === 0) return {};
-  if (validConditions.length === 1) return validConditions[0];
   
-  return { [Op.and]: validConditions };
+  // Handle edge cases functionally
+  return validConditions.length === 0 
+    ? {} 
+    : validConditions.length === 1 
+      ? validConditions[0] 
+      : { [Op.and]: validConditions };
 };
 
 /**
