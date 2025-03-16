@@ -17,12 +17,12 @@ const env = process.env.NODE_ENV || 'development';
 const config = require(__dirname + '/../config/config.js')[env];
 
 // Initialize database object
-const db: Record<string, any> = {};
+const db = {} as Record<string, any>;
 
 // Create Sequelize instance
 let sequelize: Sequelize;
 if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable] as string, config);
+  sequelize = new Sequelize(process.env[config.use_env_variable || ''] as string, config);
 } else {
   sequelize = new Sequelize(config.database, config.username, config.password, config);
 }
@@ -46,7 +46,7 @@ fs.readdirSync(__dirname)
 // Set up associations between models
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
-    db[modelName].associate(db as ModelRegistry);
+    db[modelName].associate(db as unknown as ModelRegistry);
   }
 });
 

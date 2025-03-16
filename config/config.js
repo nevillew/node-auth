@@ -9,7 +9,7 @@ dotenv.config();
 /**
  * Interface for database configuration
  */
-export interface DatabaseConfig {
+interface DatabaseConfig {
   /** Database user */
   username: string | undefined;
   /** Database password */
@@ -49,7 +49,7 @@ interface Config {
   production: DatabaseConfig;
 }
 
-const config: Config = {
+const config = {
   /**
    * Development environment database configuration
    * Uses environment variables for sensitive data
@@ -60,7 +60,7 @@ const config: Config = {
     database: process.env.DATABASE_NAME || 'multitenant_dev',
     host: process.env.DATABASE_HOSTNAME || '127.0.0.1',
     port: process.env.DATABASE_PORT || 5432,
-    dialect: (process.env.DATABASE_ENGINE as 'postgres') || 'postgres',
+    dialect: (process.env.DATABASE_ENGINE as 'postgres' || 'postgres'),
     pool: {
       max: 20,
       min: 5,
